@@ -8,7 +8,7 @@ defaults:
 
 dummy:
 dset:
-  musdb: /workspace/public_data/MusicDataset/musdb18hq
+  musdb: /workspace/MusicDataset/musdb18hq
   musdb_samplerate: 44100
   wav:  # path to custom wav dataset
   segment: 11
@@ -147,8 +147,8 @@ slurm:
   
   
 checkpoint:
-  monitor: 'Train/Loss'
-  filename: "e={epoch:02d}-train_loss={Train/Loss:.2f}"
+  monitor: 'TRAIN/loss' #'Train/Loss'
+  filename: "e={epoch:02d}-TRAIN_loss={TRAIN/loss:.2f}"
   save_top_k: 1   #only save the one whatever the minimum
   mode: 'min'     #if validation/acc, then will monitor 'max'
   save_last: True #save the last point
