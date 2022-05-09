@@ -30,7 +30,8 @@ from torch.utils.data import DataLoader, Subset
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
-
+import sys
+from demucs.states import get_quantizer
 
 # =====================Functions for dataset===========================
 
@@ -250,10 +251,19 @@ def main(args):
                        samplerate=args.dset.samplerate, channels=args.dset.channels,
                        normalize=args.dset.normalize)
 
+    valid_set = Wavset(root, metadata_valid, args.dset.sources,
+                       segment=args.dset.segment, shift=args.dset.shift,
+                       samplerate=args.dset.samplerate, channels=args.dset.channels,
+                       normalize=args.dset.normalize)
+    
     train_loader = DataLoader(
             train_set, batch_size=args.batch_size, shuffle=True,
             num_workers=args.misc.num_workers, drop_last=True)
 
+    valid_loader = DataLoader(
+            valid_set, batch_size=args.batch_size, shuffle=True,
+            num_workers=args.misc.num_workers, drop_last=True)
+    
     model = Demucs(
                    sources=args.dset.sources,
                    audio_channels=args.dset.channels,
@@ -262,8 +272,16 @@ def main(args):
                    **args.demucs,
                    args=args
                   )
-
-    checkpoint_callback = ModelCheckpoint(**args.checkpoint)
+    quantizer = get_quantizer(model, args.quant, model.optimizers)
+    model.quantizer = quantizer #can use as self.quantizer in class Demucs
+    
+#     print(f'optimizer = {model.optimizers}')
+    
+#     print(f'len train_set= {len(train_set)}')
+#     print(f'len valid_set= {len(valid_set)}')
+    
+    checkpoint_callback = ModelCheckpoint(**args.checkpoint,auto_insert_metric_name=False)
+    #auto_insert_metric_name = False: won't refer the '/' in filename as path
 
     name = f'demucs_experiment'
     #file name shown in tensorboard logger
@@ -277,7 +295,7 @@ def main(args):
                          check_val_every_n_epoch=1)
 
 
-    trainer.fit(model, train_loader)
+    trainer.fit(model, train_loader,valid_loader)
     
 if __name__ == "__main__":
     main()      
