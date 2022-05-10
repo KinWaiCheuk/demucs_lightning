@@ -14,7 +14,7 @@ dset:
   segment: 11
   shift: 1
   train_valid: false
-  full_cv: true
+  full_cv: True
   samplerate: 44100
   channels: 2
   normalize: true
@@ -34,7 +34,8 @@ test:
   nonhq:   # path to non hq MusDB for evaluation
 
 epochs: 360
-batch_size: 4
+train_batch_size: 4
+valid_batch_size: 1 #ref for valid batch size: https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/train.py#L101
 gpus: 1
 max_batches:  # limit the number of batches per epoch, useful for debugging
               # or if your dataset is gigantic.
