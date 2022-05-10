@@ -18,7 +18,7 @@ import musdb
 import museval
 import torch as th
 
-from .apply import apply_model
+# from .apply import apply_model
 from .audio import convert_audio, save_audio
 from . import distrib
 from .utils import DummyPoolExecutor
@@ -69,7 +69,7 @@ def evaluate(solver, compute_sdr=False):
     Evaluate model using museval.
     `new_only` means using only the MDX definition of the SDR, which is much faster to evaluate.
     """
-
+    from .apply import apply_model
     args = solver.args
 
     output_dir = solver.folder / "results"

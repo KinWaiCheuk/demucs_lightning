@@ -13,8 +13,12 @@ from torch.nn import functional as F
 from torchaudio.transforms import Resample
 from pytorch_lightning.core.lightning import LightningModule
 
-from .states import capture_init
+from .states import capture_init, get_quantizer
 from .utils import center_trim, unfold
+from .svd import svd_penalty
+from .evaluate import new_sdr
+
+
 
 import sys
 
@@ -327,7 +331,8 @@ class Demucs(LightningModule):
         self.upsampler = Resample(1, 2)
         self.downsampler = Resample(2, 1)
         self.args = args
-
+        
+        
         if glu:
             activation = nn.GLU(dim=1)
             ch_scale = 2
@@ -459,6 +464,7 @@ class Demucs(LightningModule):
         The original code can be found here
         https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/solver.py#L290
         """
+        #sources (list[str]): list of source names
         # TODO # sources = self.augment(sources)
         mix = sources.sum(dim=1)
         estimate = self(mix)
@@ -467,7 +473,7 @@ class Demucs(LightningModule):
         # checking if the estimate has the correct shape
         assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
         dims = tuple(range(2, sources.dim()))
-        
+
         if self.args.optim.loss == 'l1':
             loss = F.l1_loss(estimate, sources, reduction='none')
             torch.save(loss, 'loss.pt')
@@ -481,27 +487,92 @@ class Demucs(LightningModule):
             reco = reco.mean(0)
         else:
             raise ValueError(f"Invalid loss {self.args.loss}")
-            
+
         weights = torch.tensor(self.args.weights).to(sources)
         loss = (loss * weights).sum() / weights.sum()
 
+        # self.quantizer = get_quantizer(self, args.quant, self.optimizer)
+        # quantization: get self.quantizer from train.py
+        ms = 0
+        #ms: model size
+        if self.quantizer is not None:
+            ms = self.quantizer.model_size()
+            print(f'msssssssss')
+        if self.args.quant.diffq:
+            loss += args.quant.diffq * ms
+            print(f'ms line 501')
+            #use ms to calculate loss
+
         
-        # TODO # quantization
-#         if self.quantizer is not None:
-#             ms = self.quantizer.model_size()
-#         if args.quant.diffq:
-#             loss += args.quant.diffq * ms       
-
-        # TODO # penality
-#         kw = dict(args.svd)
-#         kw.pop('penalty')
-#         penalty = svd_penalty(self.model, **kw)
-#         losses['penalty'] = penalty
-#         loss += args.svd.penalty * penalty
-
+        losses = {}
+        losses['TRAIN/reco'] = (reco * weights).sum() / weights.sum()
+        losses['TRAIN/ms'] = ms
+       
+    
+        # penality
+        if self.args.svd.penalty > 0:            
+            kw = dict(args.svd)
+            kw.pop('penalty')
+            penalty = svd_penalty(self, **kw)
+            losses['penalty'] = penalty
+            loss += args.svd.penalty * penalty
+        losses['TRAIN/loss'] = loss
+        
+        self.log_dict(losses, on_step=False, on_epoch=True)
         #log(graph title, take acc as data, on_step: plot every step, on_epch: plot every epoch)
+        
         return loss
+   
 
+    def validation_step(self,sources, batch_idx):
+        from .apply import apply_model
+        mix = sources[:, 0]
+        
+        ############################
+        if self.args.valid_apply:
+            estimate = apply_model(self, mix, split=self.args.test.split, overlap=0)
+        else:
+            estimate = self.dmodel(mix)
+        
+        # checking if the estimate has the correct shape
+        assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
+        dims = tuple(range(2, sources.dim()))
+
+        if self.args.optim.loss == 'l1':
+            loss = F.l1_loss(estimate, sources, reduction='none')
+            torch.save(loss, 'loss.pt')
+            torch.save(dims, 'dims.pt')
+            loss = loss.mean(dims).mean(0)
+            reco = loss
+        elif self.args.optim.loss == 'mse':
+            loss = F.mse_loss(estimate, sources, reduction='none')
+            loss = loss.mean(dims)
+            reco = loss**0.5
+            reco = reco.mean(0)
+        else:
+            raise ValueError(f"Invalid loss {self.args.loss}")
+
+        weights = torch.tensor(self.args.weights).to(sources)
+        loss = (loss * weights).sum() / weights.sum()
+        
+        losses = {}
+        losses['VAL/loss'] = loss
+        
+        nsdrs = new_sdr(sources, estimate.detach()).mean(0)
+        #sources is each batch of daatset [tensor]
+        total = 0
+        for source, nsdr, w in zip(self.sources, nsdrs, weights): 
+        #self.sources is [str]
+            losses[f'nsdr_{source}'] = nsdr
+            total += w * nsdr
+        losses['VAL/nsdr'] = total / weights.sum()                
+        
+        self.log_dict( losses, on_step=False, on_epoch=True)
+       
+        return loss, nsdr       
+
+    #   loss, reco, alid loss, nsdr
+    
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
             self.parameters(), lr=self.args.optim.lr,
