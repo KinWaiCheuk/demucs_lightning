@@ -250,18 +250,19 @@ def main(args):
                        segment=args.dset.segment, shift=args.dset.shift,
                        samplerate=args.dset.samplerate, channels=args.dset.channels,
                        normalize=args.dset.normalize)
-
-    valid_set = Wavset(root, metadata_valid, args.dset.sources,
-                       segment=args.dset.segment, shift=args.dset.shift,
-                       samplerate=args.dset.samplerate, channels=args.dset.channels,
-                       normalize=args.dset.normalize)
+    
+#     valid_sources =  [MIXTURE] + list(args.dset.sources)
+    valid_set = Wavset(root, metadata_valid, args.dset.sources,                      
+                       samplerate=args.dset.samplerate,
+                       channels=args.dset.channels,
+                       normalize=args.dset.normalize, **kw_cv)
     
     train_loader = DataLoader(
-            train_set, batch_size=args.batch_size, shuffle=True,
+            train_set, batch_size=args.train_batch_size, shuffle=True,
             num_workers=args.misc.num_workers, drop_last=True)
 
     valid_loader = DataLoader(
-            valid_set, batch_size=args.batch_size, shuffle=True,
+            valid_set, batch_size=args.valid_batch_size, shuffle=True,
             num_workers=args.misc.num_workers, drop_last=True)
     
     model = Demucs(
@@ -277,8 +278,8 @@ def main(args):
     
 #     print(f'optimizer = {model.optimizers}')
     
-#     print(f'len train_set= {len(train_set)}')
-#     print(f'len valid_set= {len(valid_set)}')
+#     print(f'len train_set= {len(train_set)}') #len train_set= 18368
+#     print(f'len valid_set= {len(valid_set)}') #len valid_set= 14
     
     checkpoint_callback = ModelCheckpoint(**args.checkpoint,auto_insert_metric_name=False)
     #auto_insert_metric_name = False: won't refer the '/' in filename as path
