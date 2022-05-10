@@ -17,6 +17,7 @@ from .states import capture_init, get_quantizer
 from .utils import center_trim, unfold
 from .svd import svd_penalty
 from .evaluate import new_sdr
+from . import augment
 
 
 
@@ -332,6 +333,16 @@ class Demucs(LightningModule):
         self.downsampler = Resample(2, 1)
         self.args = args
         
+        augments = [augment.Shift(shift=int(args.dset.samplerate * args.dset.shift),
+                                  same=args.augment.shift_same)]
+        if args.augment.flip:
+            augments += [augment.FlipChannels(), augment.FlipSign()]
+        for aug in ['scale', 'remix']:
+            kw = getattr(args.augment, aug)
+            if kw.proba:
+                augments.append(getattr(augment, aug.capitalize())(**kw))
+        self.augment = torch.nn.Sequential(*augments)        
+        
         
         if glu:
             activation = nn.GLU(dim=1)
@@ -465,9 +476,10 @@ class Demucs(LightningModule):
         https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/solver.py#L290
         """
         #sources (list[str]): list of source names
-        # TODO # sources = self.augment(sources)
+        sources = self.augment(sources) #[B, num_sources, 2, 44100*segment_length]
+        
         mix = sources.sum(dim=1)
-        estimate = self(mix)
+        estimate = self(mix) #[B, num_sources, 2, 44100*segment_length]
         # TODO # sources = self.model.transform_target(mix, sources)
 
         # checking if the estimate has the correct shape
@@ -476,8 +488,6 @@ class Demucs(LightningModule):
 
         if self.args.optim.loss == 'l1':
             loss = F.l1_loss(estimate, sources, reduction='none')
-            torch.save(loss, 'loss.pt')
-            torch.save(dims, 'dims.pt')
             loss = loss.mean(dims).mean(0)
             reco = loss
         elif self.args.optim.loss == 'mse':
@@ -497,10 +507,8 @@ class Demucs(LightningModule):
         #ms: model size
         if self.quantizer is not None:
             ms = self.quantizer.model_size()
-            print(f'msssssssss')
         if self.args.quant.diffq:
             loss += args.quant.diffq * ms
-            print(f'ms line 501')
             #use ms to calculate loss
 
         
@@ -526,13 +534,12 @@ class Demucs(LightningModule):
 
     def validation_step(self,sources, batch_idx):
         from .apply import apply_model
-        mix = sources[:, 0]
-        
-        ############################
+        # source 1, 5, 2, 7736477)
+        mix = sources[:, 0] 
+        sources = sources[:, 1:]         
+
         if self.args.valid_apply:
             estimate = apply_model(self, mix, split=self.args.test.split, overlap=0)
-        else:
-            estimate = self.dmodel(mix)
         
         # checking if the estimate has the correct shape
         assert estimate.shape == sources.shape, (estimate.shape, sources.shape)

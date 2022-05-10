@@ -252,7 +252,7 @@ def main(args):
                        normalize=args.dset.normalize)
     
 #     valid_sources =  [MIXTURE] + list(args.dset.sources)
-    valid_set = Wavset(root, metadata_valid, args.dset.sources,                      
+    valid_set = Wavset(root, metadata_valid, [MIXTURE] + list(args.dset.sources),                      
                        samplerate=args.dset.samplerate,
                        channels=args.dset.channels,
                        normalize=args.dset.normalize, **kw_cv)
