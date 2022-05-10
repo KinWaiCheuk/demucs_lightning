@@ -19,6 +19,7 @@ from .svd import svd_penalty
 from .evaluate import new_sdr
 
 
+
 import sys
 
 
@@ -524,10 +525,15 @@ class Demucs(LightningModule):
    
 
     def validation_step(self,sources, batch_idx):
-        mix = sources.sum(dim=1)
-        estimate = self(mix)
-        # TODO # sources = self.model.transform_target(mix, sources)
-
+        from .apply import apply_model
+        mix = sources[:, 0]
+        
+        ############################
+        if self.args.valid_apply:
+            estimate = apply_model(self, mix, split=self.args.test.split, overlap=0)
+        else:
+            estimate = self.dmodel(mix)
+        
         # checking if the estimate has the correct shape
         assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
         dims = tuple(range(2, sources.dim()))
