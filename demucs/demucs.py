@@ -547,8 +547,6 @@ class Demucs(LightningModule):
 
         if self.args.optim.loss == 'l1':
             loss = F.l1_loss(estimate, sources, reduction='none')
-            torch.save(loss, 'loss.pt')
-            torch.save(dims, 'dims.pt')
             loss = loss.mean(dims).mean(0)
             reco = loss
         elif self.args.optim.loss == 'mse':
@@ -570,7 +568,7 @@ class Demucs(LightningModule):
         total = 0
         for source, nsdr, w in zip(self.sources, nsdrs, weights): 
         #self.sources is [str]
-            losses[f'nsdr_{source}'] = nsdr
+            losses[f'VAL/nsdr_{source}'] = nsdr
             total += w * nsdr
         losses['VAL/nsdr'] = total / weights.sum()                
         
@@ -579,6 +577,52 @@ class Demucs(LightningModule):
         return loss, nsdr       
 
     #   loss, reco, alid loss, nsdr
+    def test_step(self,sources, batch_idx):
+        from .apply import apply_model
+        # source 1, 5, 2, 7736477)
+        mix = sources[:, 0] 
+        sources = sources[:, 1:]         
+
+        if self.args.valid_apply:
+            estimate = apply_model(self, mix, split=self.args.test.split, overlap=0)
+        
+        # checking if the estimate has the correct shape
+        assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
+        dims = tuple(range(2, sources.dim()))
+
+        if self.args.optim.loss == 'l1':
+            loss = F.l1_loss(estimate, sources, reduction='none')
+            loss = loss.mean(dims).mean(0)
+            reco = loss
+        elif self.args.optim.loss == 'mse':
+            loss = F.mse_loss(estimate, sources, reduction='none')
+            loss = loss.mean(dims)
+            reco = loss**0.5
+            reco = reco.mean(0)
+        else:
+            raise ValueError(f"Invalid loss {self.args.loss}")
+
+        weights = torch.tensor(self.args.weights).to(sources)
+        loss = (loss * weights).sum() / weights.sum()
+        
+        losses = {}
+        losses['Test/loss'] = loss
+        
+        nsdrs = new_sdr(sources, estimate.detach()).mean(0)
+        #sources is each batch of daatset [tensor]
+        total = 0
+        for source, nsdr, w in zip(self.sources, nsdrs, weights): 
+        #self.sources is [str]
+            losses[f'Test/nsdr_{source}'] = nsdr
+            total += w * nsdr
+        losses['Test/nsdr'] = total / weights.sum()                
+        
+        self.log_dict( losses, on_step=False, on_epoch=True)
+       
+        return loss, nsdr       
+
+    #   loss, reco, alid loss, nsdr    
+    
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
@@ -597,3 +641,4 @@ class Demucs(LightningModule):
                     if old in state and new not in state:
                         state[new] = state.pop(old)
         super().load_state_dict(state, strict=strict)
+
