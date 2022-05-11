@@ -1,3 +1,6 @@
+data_root: '/workspace/MusicDataset/musdb18hq'
+download: False
+  
 defaults:
   - _self_
   - dset: musdb44
@@ -8,23 +11,47 @@ defaults:
 
 dummy:
 dset:
-  musdb: /workspace/MusicDataset/musdb18hq
-  musdb_samplerate: 44100
-  wav:  # path to custom wav dataset
-  segment: 11
-  shift: 1
-  train_valid: false
-  full_cv: True
-  samplerate: 44100
-  channels: 2
-  normalize: true
-  metadata: ./metadata
-  sources: ['drums', 'bass', 'other', 'vocals']
+    train:
+        root: ${data_root}
+        download: ${download} 
+        segment: 11
+        shift: 1
+        normalize: True
+        samplerate: 44100
+        channels: 2
+        ext: '.wav'
+          
+    valid:
+        root: ${data_root}
+        download: False
+        segment: 
+        shift:
+        normalize:
+        samplerate: 44100
+        channels: 2
+        ext: '.wav'
+        
+    test:
+        root: ${data_root}
+        download: False
+        segment:
+        shift:
+        normalize:
+        samplerate: 44100
+        channels: 2
+        ext: '.wav'
+    
+    sources: ['drums', 'bass', 'other', 'vocals']
+    wav:  # path to custom wav dataset
+
+#default value in AudioLoader.music.mss.MusdbHQ: segment=None, shift=None
+#normalize = True, samplerate=44100, channels=2, ext='.wav'
+
 
 test:
   save: False
   best: True
-  workers: 2
+#   workers: 2
   every: 20
   split: true
   shifts: 1
@@ -34,8 +61,22 @@ test:
   nonhq:   # path to non hq MusDB for evaluation
 
 epochs: 360
-train_batch_size: 4
-valid_batch_size: 1 #ref for valid batch size: https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/train.py#L101
+dataloader: 
+    train:
+        batch_size: 4
+        shuffle: True
+        num_workers: 10
+        
+    valid:
+        batch_size: 1 #ref for valid batch size: https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/train.py#L101
+        shuffle: True
+        num_workers: 10
+        
+    test:
+        batch_size: 1
+        shuffle: 
+        num_workers: 2
+        
 gpus: 1
 max_batches:  # limit the number of batches per epoch, useful for debugging
               # or if your dataset is gigantic.
@@ -76,7 +117,6 @@ continue_best: true
 continue_opt: false
 
 misc:
-  num_workers: 10
   num_prints: 4
   show: false
   verbose: false
