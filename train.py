@@ -60,7 +60,7 @@ def main(args):
                   ext= args.dset.valid.ext)
     
     test_set = MusdbHQ(root = args.dset.test.root, 
-                  subset= 'validation', 
+                  subset= 'test', 
                   download = args.dset.test.download, 
                   segment= args.dset.test.segment, 
                   shift= args.dset.test.shift, 

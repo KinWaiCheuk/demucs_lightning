@@ -1,5 +1,6 @@
 data_root: '/workspace/MusicDataset/musdb18hq'
 download: False
+samplerate: 44100
   
 defaults:
   - _self_
@@ -17,41 +18,36 @@ dset:
         segment: 11
         shift: 1
         normalize: True
-        samplerate: 44100
+        samplerate: ${samplerate}
         channels: 2
         ext: '.wav'
           
     valid:
         root: ${data_root}
         download: False
-        segment: 
-        shift:
-        normalize:
-        samplerate: 44100
+        segment: Null 
+        shift: Null
+        normalize: True
+        samplerate: ${samplerate}
         channels: 2
         ext: '.wav'
         
     test:
         root: ${data_root}
         download: False
-        segment:
-        shift:
-        normalize:
-        samplerate: 44100
+        segment: Null
+        shift: Null
+        normalize: True
+        samplerate: ${samplerate}
         channels: 2
         ext: '.wav'
     
     sources: ['drums', 'bass', 'other', 'vocals']
     wav:  # path to custom wav dataset
 
-#default value in AudioLoader.music.mss.MusdbHQ: segment=None, shift=None
-#normalize = True, samplerate=44100, channels=2, ext='.wav'
-
-
 test:
   save: False
   best: True
-#   workers: 2
   every: 20
   split: true
   shifts: 1
@@ -69,12 +65,12 @@ dataloader:
         
     valid:
         batch_size: 1 #ref for valid batch size: https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/train.py#L101
-        shuffle: True
+        shuffle: False
         num_workers: 10
         
     test:
         batch_size: 1
-        shuffle: 
+        shuffle: False
         num_workers: 2
         
 gpus: 1
