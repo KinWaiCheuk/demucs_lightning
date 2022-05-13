@@ -333,7 +333,7 @@ class Demucs(LightningModule):
         self.downsampler = Resample(2, 1)
         self.args = args
         
-        augments = [augment.Shift(shift=int(args.dset.samplerate * args.dset.shift),
+        augments = [augment.Shift(shift=int(args.dset.train.samplerate * args.dset.train.shift),
                                   same=args.augment.shift_same)]
         if args.augment.flip:
             augments += [augment.FlipChannels(), augment.FlipSign()]

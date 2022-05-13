@@ -1,3 +1,8 @@
+data_root: '/workspace/MusicDataset/musdb18hq'
+download: False
+samplerate: 44100
+model: Demucs
+  
 defaults:
   - _self_
   - dset: musdb44
@@ -8,23 +13,39 @@ defaults:
 
 dummy:
 dset:
-  musdb: /workspace/MusicDataset/musdb18hq
-  musdb_samplerate: 44100
-  wav:  # path to custom wav dataset
-  segment: 11
-  shift: 1
-  train_valid: false
-  full_cv: True
-  samplerate: 44100
-  channels: 2
-  normalize: true
-  metadata: ./metadata
-  sources: ['drums', 'bass', 'other', 'vocals']
+    train:
+        root: ${data_root}
+        download: ${download} 
+        segment: 11
+        shift: 1
+        normalize: True
+        samplerate: ${samplerate}
+        channels: 2
+        ext: '.wav'         
+    valid:
+        root: ${data_root}
+        download: False
+        segment: Null 
+        shift: Null
+        normalize: True
+        samplerate: ${samplerate}
+        channels: 2
+        ext: '.wav'        
+    test:
+        root: ${data_root}
+        download: False
+        segment: Null
+        shift: Null
+        normalize: True
+        samplerate: ${samplerate}
+        channels: 2
+        ext: '.wav'    
+    sources: ['drums', 'bass', 'other', 'vocals']
+    wav:  # path to custom wav dataset
 
 test:
   save: False
   best: True
-  workers: 2
   every: 20
   split: true
   shifts: 1
@@ -34,8 +55,21 @@ test:
   nonhq:   # path to non hq MusDB for evaluation
 
 epochs: 360
-train_batch_size: 4
-valid_batch_size: 1 #ref for valid batch size: https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/train.py#L101
+dataloader: 
+    train:
+        batch_size: 4
+        shuffle: True
+        num_workers: 10        
+    valid:
+        batch_size: 1 #ref for valid batch size: https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/train.py#L101
+        shuffle: False
+        num_workers: 10
+        
+    test:
+        batch_size: 1
+        shuffle: False
+        num_workers: 2
+        
 gpus: 1
 max_batches:  # limit the number of batches per epoch, useful for debugging
               # or if your dataset is gigantic.
@@ -76,7 +110,6 @@ continue_best: true
 continue_opt: false
 
 misc:
-  num_workers: 10
   num_prints: 4
   show: false
   verbose: false
@@ -88,9 +121,10 @@ ema:
   batch: []
 
 model_segment:  # override the segment parameter for the model, usually 4 times the training segment.
-model: demucs
-demucs:  # see demucs/demucs.py for a detailed description
+
+demucs: # see demucs/demucs.py for a detailed description
   # Channels
+  audio_channels: 2
   channels: 64
   growth: 2
   # Main structure
@@ -120,6 +154,48 @@ demucs:  # see demucs/demucs.py for a detailed description
   # Weight init
   rescale: 0.1
 
+hdemucs:  # see demucs/hdemucs.py for a detailed description
+  # Channels
+  audio_channels: 2
+  channels: 48
+  channels_time:
+  growth: 2
+  # STFT
+  nfft: 4096
+  wiener_iters: 0
+  end_iters: 0
+  wiener_residual: false
+  cac: true
+  # Main structure
+  depth: 6
+  rewrite: true
+  hybrid: true
+  hybrid_old: false
+  # Frequency Branch
+  multi_freqs: []
+  multi_freqs_depth: 3
+  freq_emb: 0.2
+  emb_scale: 10
+  emb_smooth: true
+  # Convolutions
+  kernel_size: 8
+  stride: 4
+  time_stride: 2
+  context: 1
+  context_enc: 0
+  # normalization
+  norm_starts: 4
+  norm_groups: 4
+  # DConv residual branch
+  dconv_mode: 1
+  dconv_depth: 2
+  dconv_comp: 4
+  dconv_attn: 4
+  dconv_lstm: 4
+  dconv_init: 1e-3
+  # Weight init
+  rescale: 0.1
+  
 svd:  # see svd.py for documentation
   penalty: 0
   min_size: 0.1
