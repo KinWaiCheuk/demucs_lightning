@@ -33,62 +33,74 @@ from pytorch_lightning.loggers import TensorBoardLogger
 import sys
 from demucs.states import get_quantizer
 
-#lobrary for Musdb dataset
+#library for Musdb dataset
 from AudioLoader.music.mss import MusdbHQ
 
 
 @hydra.main(config_path="conf", config_name="config")
 def main(args):    
     train_set = MusdbHQ(root = args.dset.train.root, 
-                  subset= 'training', 
-                  download = args.dset.train.download, 
-                  segment= args.dset.train.segment, 
-                  shift= args.dset.train.shift, 
-                  normalize= args.dset.train.normalize,
-                  samplerate= args.dset.train.samplerate, 
-                  channels= args.dset.train.channels, 
-                  ext= args.dset.train.ext)
+                        subset= 'training', 
+                        download = args.dset.train.download, 
+                        segment= args.dset.train.segment, 
+                        shift= args.dset.train.shift, 
+                        normalize= args.dset.train.normalize,
+                        samplerate= args.dset.train.samplerate, 
+                        channels= args.dset.train.channels, 
+                        ext= args.dset.train.ext)
 
     valid_set = MusdbHQ(root = args.dset.valid.root, 
-                  subset= 'validation', 
-                  download = args.dset.valid.download, 
-                  segment= args.dset.valid.segment, 
-                  shift= args.dset.valid.shift, 
-                  normalize= args.dset.valid.normalize,
-                  samplerate= args.dset.valid.samplerate, 
-                  channels= args.dset.valid.channels, 
-                  ext= args.dset.valid.ext)
+                        subset= 'validation', 
+                        download = args.dset.valid.download, 
+                        segment= args.dset.valid.segment, 
+                        shift= args.dset.valid.shift, 
+                        normalize= args.dset.valid.normalize,
+                        samplerate= args.dset.valid.samplerate, 
+                        channels= args.dset.valid.channels, 
+                        ext= args.dset.valid.ext)
     
     test_set = MusdbHQ(root = args.dset.test.root, 
-                  subset= 'test', 
-                  download = args.dset.test.download, 
-                  segment= args.dset.test.segment, 
-                  shift= args.dset.test.shift, 
-                  normalize= args.dset.test.normalize,
-                  samplerate= args.dset.test.samplerate, 
-                  channels= args.dset.test.channels, 
-                  ext= args.dset.test.ext)
+                       subset= 'test', 
+                       download = args.dset.test.download, 
+                       segment= args.dset.test.segment, 
+                       shift= args.dset.test.shift, 
+                       normalize= args.dset.test.normalize,
+                       samplerate= args.dset.test.samplerate, 
+                       channels= args.dset.test.channels, 
+                       ext= args.dset.test.ext)
 
-    train_loader = DataLoader(
-            train_set, batch_size=args.dataloader.train.batch_size, shuffle= args.dataloader.train.shuffle,
-            num_workers=args.dataloader.train.num_workers, drop_last=True)
+    train_loader = DataLoader(train_set, 
+                              batch_size=args.dataloader.train.batch_size, 
+                              shuffle= args.dataloader.train.shuffle,
+                              num_workers=args.dataloader.train.num_workers, drop_last=True)
 
-    valid_loader = DataLoader(
-            valid_set, batch_size=args.dataloader.valid.batch_size, shuffle= args.dataloader.valid.shuffle,
-            num_workers=args.dataloader.valid.num_workers, drop_last=True)
+    valid_loader = DataLoader(valid_set, 
+                              batch_size=args.dataloader.valid.batch_size, 
+                              shuffle= args.dataloader.valid.shuffle,
+                              num_workers=args.dataloader.valid.num_workers, drop_last=False)
     
-    test_loader = DataLoader(
-            test_set, batch_size=args.dataloader.test.batch_size, shuffle= args.dataloader.test.shuffle,
-            num_workers=args.dataloader.test.num_workers, drop_last=True)
+    test_loader = DataLoader(test_set, 
+                             batch_size=args.dataloader.test.batch_size, 
+                             shuffle= args.dataloader.test.shuffle,
+                             num_workers=args.dataloader.test.num_workers, drop_last=False)
     
-    model = Demucs(
-                   sources=args.dset.sources,
-                   audio_channels=args.dset.train.channels,
-                   samplerate=args.dset.train.samplerate,
-                   segment=4 * args.dset.train.segment,
-                   **args.demucs,
-                   args=args
-                  )
+    if args.model == 'Demucs':
+        model = Demucs(sources=args.dset.sources,                    
+                       samplerate=args.samplerate,
+                       segment=4 * args.dset.train.segment,
+                       **args.demucs,
+                       args=args)
+    
+    elif args.model == 'HDemucs':
+        model = HDemucs(sources=args.dset.sources,
+                        samplerate=args.samplerate,
+                        segment=4 * args.dset.train.segment,
+                        **args.hdemucs,
+                        args=args)
+                        
+    else:
+        print('Invalid model, please choose Demucs or HDemucs')
+        
     quantizer = get_quantizer(model, args.quant, model.optimizers)
     model.quantizer = quantizer #can use as self.quantizer in class Demucs
     
@@ -100,7 +112,7 @@ def main(args):
     checkpoint_callback = ModelCheckpoint(**args.checkpoint,auto_insert_metric_name=False)
     #auto_insert_metric_name = False: won't refer the '/' in filename as path
 
-    name = f'demucs_experiment'
+    name = f'{args.model}_experiment-{args.epochs}'
     #file name shown in tensorboard logger
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
