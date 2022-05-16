@@ -1,0 +1,21 @@
+git+https://github.com/KinWaiCheuk/AudioLoader.git
+omegaconf 
+tqdm
+# install pytorch packages
+# these packages are located in a very specific url
+--find-links https://download.pytorch.org/whl/torch_stable.html
+torch==1.11.0+cu113
+torchaudio==0.11.0+cu113
+torchvision==0.12.0+cu113
+pytorch-lightning==1.5.8
+musdb
+dora-search
+diffq>=0.2.1
+hydra-colorlog>=1.1
+hydra-core>=1.1
+julius>=0.2.3
+lameenc>=1.2
+museval
+mypy
+openunmix
+pyyaml
