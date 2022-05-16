@@ -1,7 +1,7 @@
 data_root: '/workspace/MusicDataset/musdb18hq'
 download: False
 samplerate: 44100
-model: Demucs
+model: HDemucs
 data_augmentation: True
   
 defaults:
