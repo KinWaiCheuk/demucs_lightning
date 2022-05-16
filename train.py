@@ -13,7 +13,6 @@ import json
 import os
 import tqdm
 import torchaudio as ta
-import musdb
 
 # #library for class Wavset
 # from collections import OrderedDict
@@ -112,7 +111,7 @@ def main(args):
     checkpoint_callback = ModelCheckpoint(**args.checkpoint,auto_insert_metric_name=False)
     #auto_insert_metric_name = False: won't refer the '/' in filename as path
 
-    name = f'{args.model}_experiment-{args.epochs}'
+    name = f'{args.model}_experiment_epoch={args.epochs}_augmentation={args.data_augmentation}'
     #file name shown in tensorboard logger
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
