@@ -333,15 +333,16 @@ class Demucs(LightningModule):
         self.downsampler = Resample(2, 1)
         self.args = args
         
-        augments = [augment.Shift(shift=int(args.dset.train.samplerate * args.dset.train.shift),
-                                  same=args.augment.shift_same)]
-        if args.augment.flip:
-            augments += [augment.FlipChannels(), augment.FlipSign()]
-        for aug in ['scale', 'remix']:
-            kw = getattr(args.augment, aug)
-            if kw.proba:
-                augments.append(getattr(augment, aug.capitalize())(**kw))
-        self.augment = torch.nn.Sequential(*augments)        
+        if args.data_augmentation:
+            augments = [augment.Shift(shift=int(args.samplerate * args.dset.train.shift),
+                                      same=args.augment.shift_same)]
+            if args.augment.flip:
+                augments += [augment.FlipChannels(), augment.FlipSign()]
+            for aug in ['scale', 'remix']:
+                kw = getattr(args.augment, aug)
+                if kw.proba:
+                    augments.append(getattr(augment, aug.capitalize())(**kw))
+            self.augment = torch.nn.Sequential(*augments)        
         
         
         if glu:
@@ -476,7 +477,8 @@ class Demucs(LightningModule):
         https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/solver.py#L290
         """
         #sources (list[str]): list of source names
-        sources = self.augment(sources) #[B, num_sources, 2, 44100*segment_length]
+        if self.args.data_augmentation:    
+            sources = self.augment(sources) #[B, num_sources, 2, 44100*segment_length]
         
         mix = sources.sum(dim=1)
         estimate = self(mix) #[B, num_sources, 2, 44100*segment_length]
