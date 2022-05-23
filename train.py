@@ -1,9 +1,11 @@
 import torch
 from demucs.svd import svd_penalty
 from hydra import initialize, compose
+from hydra.utils import to_absolute_path
 from demucs.demucs import Demucs
 from demucs.hdemucs import HDemucs
 from omegaconf import OmegaConf
+
 
 # for dataset
 import hashlib
@@ -38,6 +40,7 @@ from AudioLoader.music.mss import MusdbHQ
 
 @hydra.main(config_path="conf", config_name="config")
 def main(args):    
+    args.data_root = to_absolute_path(args.data_root) 
     train_set = MusdbHQ(root = args.dset.train.root, 
                         subset= 'training', 
                         download = args.dset.train.download, 

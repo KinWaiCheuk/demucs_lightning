@@ -1,4 +1,4 @@
-data_root: '/workspace/MusicDataset/musdb18hq'
+data_root: './musdb18hq'
 download: False
 samplerate: 44100
 model: HDemucs
