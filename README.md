@@ -36,8 +36,9 @@ For more information of Audioloader, you can visit [KinWaiCheuk/AudioLoader](htt
 Or else you can download MusdbHQ dataset manually from [zenodo](https://zenodo.org/record/3338373#.YoEmSC8RpQI).
 
 ## Requirement
+`Python==3.8.10` and `ffmpeg` is required to run this repo.
 
-Python3.8 is required to run this repo.
+If `ffmpeg` is not installed on your machine, you can install it via `apt install ffmpeg`
 
 You can install all required libraries at once via
 ``` bash
@@ -45,38 +46,25 @@ pip install -r requirements.txt
 ```
 
 ## Train the model
-```bash
-python train.py
-```
-
-Note:
-
-* If this is your 1st time to train the model, you need to set `download` argument to True via
+If it is your first time running the repo, you can use the argument `download=True` to automatically download and setup the `musdb18hq` dataset.
 
 ```bash
-python train.py download=True
-```
-* If you have existing MusdbHQ dataset, you need to indicate its path in `data_root` in `conf/config.yaml`
-
-* You can set which GPU to use by using the `gpus` argument.
-
-``` bash
-python train.py gpus=[1]
-```
-* Default model of this repo is Hybrid Demucs (v3). You can switch to Demucs (v2) by changing the `model` argument.
-
-```bash
-python train.py model=Demucs
+python train.py gpus=[0] data_root='./' model=HDemucs download=True
 ```
 
-## Key default setting
-* model=HDemucs
-* data_augmentation=True
-* samplerate=44100
-* For training set: `dset.train.segment=11` `dset.train.shift=1` `dataloader.train.batch_size=4`
-* For validation set: `dset.valid.segment=None` `dset.valid.shift=None` `dataloader.valid.batch_size=1`
-* For test set: `dset.test.segment=None` `dset.test.shift=None` `dataloader.test.batch_size=1`
-* epochs=360
-* optim.lr=3e-4
+### arguments
+The full list of arguments and their default values can be found in `conf/config.yaml`.
+
+__gpus__: Select which GPU to use. If you have multiple GPUs on your machine and you want to use GPU:2, you can set `gpus=[2]`. If you want to use DDP (multi-GPU training), you can set `gpus=2`, it will automatically use the first two GPUs avaliable in your machine. If you want to use GPU:0, GPU:2, and GPU:3 for training, you can set `gpus=[0,2,3]`.
+
+__data_root__: Select the location of your dataset. If `download=True`, it will become the directory that the dataset is going to be downloaded to.
+
+__model__: Select which version of demucs to use. Default model of this repo is Hybrid Demucs (v3). You can switch to Demucs (v2) by setting the `model=Demucs`.
+
+__samplerate__: The sampling rate for the audio. Default as `44100`.
+
+__epochs__: The number of epochs to train the model. Default as `360`.
+
+__optim.lr__: Learning rate of the optimizer. Default as `3e-4`.
 
 For detail information of the configuration, you can check via `conf/config.yaml`
