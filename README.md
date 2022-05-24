@@ -3,6 +3,9 @@
 1. [Introduction](#Introduction)
 1. [Requirement](#Requirement)
 1. [Training](#Training)
+    1. [Demucs](#Demucs)
+    1. [HDemucs](#HDemucs)    
+1. [Training with a less powerful GPU](#Training-with-a-small-GPU)
 1. [Key default setting](#Key-default-setting)
 
 
