@@ -1,4 +1,4 @@
-git+https://github.com/KinWaiCheuk/AudioLoader.git
+AudioLoader==0.1.0
 omegaconf 
 tqdm
 # install pytorch packages
