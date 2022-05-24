@@ -3,6 +3,25 @@ download: False
 samplerate: 44100
 model: HDemucs
 data_augmentation: True
+batch_size: 4
+gpus: 1
+epochs: 360
+seed: 42
+debug: false
+valid_apply: true
+flag:
+save_every:
+weights: [1., 1., 1., 1.]  # weights over each source for the training/valid loss.
+continue_from:  # continue from other XP, give the XP Dora signature.
+continue_pretrained:   # signature of a pretrained XP, this cannot be a bag of models.
+pretrained_repo:   # repo for pretrained model (default is official AWS)
+continue_best: true
+continue_opt: false
+
+
+
+max_batches:  # limit the number of batches per epoch, useful for debugging
+              # or if your dataset is gigantic.
   
 defaults:
   - _self_
@@ -55,10 +74,9 @@ test:
   metric: 'loss'  # metric used for best model selection on the valid set, can also be nsdr
   nonhq:   # path to non hq MusDB for evaluation
 
-epochs: 360
 dataloader: 
     train:
-        batch_size: 4
+        batch_size: ${batch_size}
         shuffle: True
         num_workers: 10        
     valid:
@@ -71,9 +89,6 @@ dataloader:
         shuffle: False
         num_workers: 2
         
-gpus: 1
-max_batches:  # limit the number of batches per epoch, useful for debugging
-              # or if your dataset is gigantic.
 optim:
   lr: 3e-4
   momentum: 0.9
@@ -83,12 +98,6 @@ optim:
   weight_decay: 0
   clip_grad: 0
 
-seed: 42
-debug: false
-valid_apply: true
-flag:
-save_every:
-weights: [1., 1., 1., 1.]  # weights over each source for the training/valid loss.
 
 augment:
   shift_same: false
@@ -97,18 +106,12 @@ augment:
     max_tempo: 12
   remix:
     proba: 1
-    group_size: 4
+    group_size: 2
   scale:
     proba: 1
     min: 0.25
     max: 1.25
   flip: true
-
-continue_from:  # continue from other XP, give the XP Dora signature.
-continue_pretrained:   # signature of a pretrained XP, this cannot be a bag of models.
-pretrained_repo:   # repo for pretrained model (default is official AWS)
-continue_best: true
-continue_opt: false
 
 misc:
   num_prints: 4
