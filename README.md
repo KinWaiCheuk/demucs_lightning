@@ -2,7 +2,7 @@
 
 1. [Introduction](#Introduction)
 1. [Requirement](#Requirement)
-1. [Train the model](#Train-the-model)
+1. [Training](#Training)
 1. [Key default setting](#Key-default-setting)
 
 
@@ -45,14 +45,49 @@ You can install all required libraries at once via
 pip install -r requirements.txt
 ```
 
-## Train the model
-If it is your first time running the repo, you can use the argument `download=True` to automatically download and setup the `musdb18hq` dataset.
+## Training
+If it is your first time running the repo, you can use the argument `download=True` to automatically download and setup the `musdb18hq` dataset. Otherwise, you can omit this  argument.
 
+### Demucs
+It requires `16,885 MB` of GPU memory. If you do not have enough GPU memory, please read [this section](#).
+
+```bash
+python train.py gpus=[0] data_root='./' model=Demucs download=True
+```
+
+### HDemucs
+It requires `19,199 MB` of GPU memory.
 ```bash
 python train.py gpus=[0] data_root='./' model=HDemucs download=True
 ```
 
-### arguments
+## Training with a small GPU
+It is possible to reduce the GPU memory required to train the models by using the following tricks. But it might affect the model performance.
+### Reduce Batch Size
+You can reduce the batch size to `2`. By doing so, it only requires `10,851 MB` of GPU memory.
+```bash
+python train.py data_root='./' batch_size=2 augment.remix.group_size=2 model=Demucs
+```
+
+### Disable Augmentation 
+You can futher reduce the batch size to `1` if data augmentation is disabled. By doing so, it only requires `7,703 MB` of GPU memory.
+```bash
+python train.py data_root='./' batch_size=1 data_augmentation=False model=Demucs
+```
+
+
+### Reduce Audio Segment Length
+You can reduce the audio segment length to only `6`. By doing so, it only requires `6,175 MB` of GPU memory.
+```bash
+python train.py data_root='./' batch_size=1 data_augmentation=False segment=6 model=Demucs
+```
+
+
+
+
+
+
+### Arguments explanations
 The full list of arguments and their default values can be found in `conf/config.yaml`.
 
 __gpus__: Select which GPU to use. If you have multiple GPUs on your machine and you want to use GPU:2, you can set `gpus=[2]`. If you want to use DDP (multi-GPU training), you can set `gpus=2`, it will automatically use the first two GPUs avaliable in your machine. If you want to use GPU:0, GPU:2, and GPU:3 for training, you can set `gpus=[0,2,3]`.
