@@ -3,6 +3,7 @@ download: False
 samplerate: 44100
 model: HDemucs
 data_augmentation: True
+segment: 11
 batch_size: 4
 gpus: 1
 epochs: 360
@@ -36,7 +37,7 @@ dset:
     train:
         root: ${data_root}
         download: ${download} 
-        segment: 11
+        segment: ${segment}
         shift: 1
         normalize: True
         samplerate: ${samplerate}
@@ -106,7 +107,7 @@ augment:
     max_tempo: 12
   remix:
     proba: 1
-    group_size: 2
+    group_size: 4
   scale:
     proba: 1
     min: 0.25
