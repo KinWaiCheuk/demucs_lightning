@@ -1,4 +1,4 @@
-# Welcome to Demucs Music Source Separation with lightning module
+# Demucs lightning
 
 1. [Introduction](#Introduction)
 1. [Requirement](#Requirement)
@@ -6,6 +6,7 @@
     1. [Demucs](#Demucs)
     1. [HDemucs](#HDemucs)    
 1. [Training with a less powerful GPU](#Training-with-a-small-GPU)
+1. [Half-Precision Training](#Half-Precision-Training)
 1. [Key default setting](#Key-default-setting)
 
 
@@ -85,8 +86,14 @@ You can reduce the audio segment length to only `6`. By doing so, it only requir
 python train.py batch_size=1 data_augmentation=False segment=6 model=Demucs
 ```
 
+## Half-Precision Training
+By default, pytorch lightning uses 32-bit precision for training. To use 16-bit precision (half-precision), you can specify `trainer.precision`:
 
+```
+python train.py trainer.precision=16
+```
 
+Double-precision is also supported by specifying `trainer.precision=64`.
 
 
 

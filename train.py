@@ -119,11 +119,9 @@ def main(args):
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
     logger = TensorBoardLogger(save_dir=".", version=1, name=name)
-    trainer = pl.Trainer(gpus=args.gpus,
-                         max_epochs=args.epochs,
+    trainer = pl.Trainer(**args.trainer,
                          callbacks=[checkpoint_callback, lr_monitor],
-                         logger=logger,
-                         check_val_every_n_epoch=1)
+                         logger=logger)
 
 
     trainer.fit(model, train_loader,valid_loader)

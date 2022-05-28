@@ -1,4 +1,4 @@
-data_root: './musdb18hq'
+data_root: '../../MusicDataset/musdb18hq'
 download: False
 samplerate: 44100
 model: HDemucs
@@ -234,7 +234,13 @@ checkpoint:
   save_top_k: 1   #only save the one whatever the minimum
   mode: 'min'     #if validation/acc, then will monitor 'max'
   save_last: True #save the last point
-  every_n_epochs: 1        
+  every_n_epochs: 1
+  
+trainer:
+  gpus: ${gpus}
+  precision: 32
+  max_epochs: ${epochs}
+  check_val_every_n_epoch: 1
 
 # Hydra config
 hydra:
