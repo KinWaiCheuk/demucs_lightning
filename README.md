@@ -4,7 +4,8 @@
 1. [Requirement](#Requirement)
 1. [Training](#Training)
     1. [Demucs](#Demucs)
-    1. [HDemucs](#HDemucs)    
+    1. [HDemucs](#HDemucs)
+1. [Resume from Checkpoints](#Resume-from-Checkpoints)
 1. [Training with a less powerful GPU](#Training-with-a-small-GPU)
 1. [Half-Precision Training](#Half-Precision-Training)
 1. [Key default setting](#Key-default-setting)
@@ -64,6 +65,21 @@ It requires `19,199 MB` of GPU memory.
 ```bash
 python train.py gpus=[0] model=HDemucs download=True
 ```
+
+## Resume from Checkpoints
+It is possible to continue training from an existing checkpoint by passing the `resume_checkpoint` argument. By default, hydra saves all the checkpoints at `'outputs/YYYY-MM-DD/HH-MM-SS/XXX_experiment_epoch=XXX_augmentation=XXX/version_1/checkpoints/XXX.ckpt'`. For example, if you have a checkpoint trained with 32-bit precision for 100 epochs already via the following command:
+
+```bash
+python train.py gpus=[0] trainer.precision=32 epochs=100
+```
+
+And now you want to train for 50 epochs more, then you can use the following CLI command:
+
+```bash
+python train.py gpus=[0] trainer.precision=16 epochs=150 resume_checkpoint='outputs/2022-05-24/21-20-17/Demucs_experiment_epoch=360_augmentation=True/version_1/checkpoints/e=123-TRAIN_loss=0.08.ckpt'
+```
+
+You can always move you checkpoints to a better place to shorten the path name.
 
 ## Training with a small GPU
 It is possible to reduce the GPU memory required to train the models by using the following tricks. But it might affect the model performance.
