@@ -1,8 +1,9 @@
 data_root: '../../MusicDataset/musdb18hq'
-download: False
+resume_checkpoint: null
+download: false
 samplerate: 44100
 model: HDemucs
-data_augmentation: True
+data_augmentation: true
 segment: 11
 batch_size: 4
 gpus: 1
@@ -241,6 +242,7 @@ trainer:
   precision: 32
   max_epochs: ${epochs}
   check_val_every_n_epoch: 1
+  resume_from_checkpoint: ${resume_checkpoint}
 
 # Hydra config
 hydra:

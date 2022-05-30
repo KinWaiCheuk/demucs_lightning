@@ -119,6 +119,9 @@ def main(args):
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
     logger = TensorBoardLogger(save_dir=".", version=1, name=name)
+    if args.trainer.resume_from_checkpoint: # resume previous training when this is given
+        args.trainer.resume_from_checkpoint = to_absolute_path(args.trainer.resume_from_checkpoint)
+        print(f"Resume training from {args.trainer.resume_from_checkpoint}")
     trainer = pl.Trainer(**args.trainer,
                          callbacks=[checkpoint_callback, lr_monitor],
                          logger=logger)
