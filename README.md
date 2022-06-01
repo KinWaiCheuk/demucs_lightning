@@ -7,8 +7,10 @@
     1. [HDemucs](#HDemucs)
 1. [Resume from Checkpoints](#Resume-from-Checkpoints)
 1. [Training with a less powerful GPU](#Training-with-a-small-GPU)
+1. [Testing pretrained model](#Testing-pretrained-model)
 1. [Half-Precision Training](#Half-Precision-Training)
 1. [Key default setting](#Key-default-setting)
+
 
 
 ## Introduction
@@ -101,6 +103,15 @@ You can reduce the audio segment length to only `6`. By doing so, it only requir
 ```bash
 python train.py batch_size=1 data_augmentation=False segment=6 model=Demucs
 ```
+
+## Testing-pretrained-model
+You can use `test.py` to evaluate the pretrained model directly by using an existing checkpoint. You can give the checkpoint path via `resume_checkpoint` argument.
+
+```bash
+python test.py resume_checkpoint='outputs/2022-05-24/21-20-17/Demucs_experiment_epoch=360_augmentation=True/version_1/checkpoints/e=123-TRAIN_loss=0.08.ckpt'
+```
+
+
 
 ## Half-Precision Training
 By default, pytorch lightning uses 32-bit precision for training. To use 16-bit precision (half-precision), you can specify `trainer.precision`:
