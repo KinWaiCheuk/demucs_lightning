@@ -6,11 +6,10 @@
     1. [Demucs](#Demucs)
     1. [HDemucs](#HDemucs)
 1. [Resume from Checkpoints](#Resume-from-Checkpoints)
-1. [Training with a less powerful GPU](#Training-with-a-small-GPU)
+1. [Training with a less powerful GPU](#Training-with-a-less-powerful-GPU)
 1. [Testing pretrained model](#Testing-pretrained-model)
 1. [Half-Precision Training](#Half-Precision-Training)
-1. [Key default setting](#Key-default-setting)
-
+1. [Default settings](#Default-settings)
 
 
 ## Introduction
@@ -83,7 +82,7 @@ python train.py gpus=[0] trainer.precision=16 epochs=150 resume_checkpoint='outp
 
 You can always move you checkpoints to a better place to shorten the path name.
 
-## Training with a small GPU
+## Training with a less powerful GPU
 It is possible to reduce the GPU memory required to train the models by using the following tricks. But it might affect the model performance.
 ### Reduce Batch Size
 You can reduce the batch size to `2`. By doing so, it only requires `10,851 MB` of GPU memory.
@@ -104,7 +103,7 @@ You can reduce the audio segment length to only `6`. By doing so, it only requir
 python train.py batch_size=1 data_augmentation=False segment=6 model=Demucs
 ```
 
-## Testing-pretrained-model
+## Testing pretrained model
 You can use `test.py` to evaluate the pretrained model directly by using an existing checkpoint. You can give the checkpoint path via `resume_checkpoint` argument.
 
 ```bash
@@ -124,7 +123,7 @@ Double-precision is also supported by specifying `trainer.precision=64`.
 
 
 
-### Arguments explanations
+## Default settings 
 The full list of arguments and their default values can be found in `conf/config.yaml`.
 
 __gpus__: Select which GPU to use. If you have multiple GPUs on your machine and you want to use GPU:2, you can set `gpus=[2]`. If you want to use DDP (multi-GPU training), you can set `gpus=2`, it will automatically use the first two GPUs avaliable in your machine. If you want to use GPU:0, GPU:2, and GPU:3 for training, you can set `gpus=[0,2,3]`.
@@ -140,5 +139,3 @@ __samplerate__: The sampling rate for the audio. Default as `44100`.
 __epochs__: The number of epochs to train the model. Default as `360`.
 
 __optim.lr__: Learning rate of the optimizer. Default as `3e-4`.
-
-For detail information of the configuration, you can check via `conf/config.yaml`
