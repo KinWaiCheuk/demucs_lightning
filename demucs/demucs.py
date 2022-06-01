@@ -620,6 +620,37 @@ class Demucs(LightningModule):
         losses['Test/nsdr'] = total / weights.sum()                
         
         self.log_dict( losses, on_step=False, on_epoch=True)
+        
+        
+        #show the audio output in tensorboard
+        if batch_idx == 0:
+            mixture_audio_stereo = mix
+            #[1, 2, 9675225]            
+            mixture_audio_mono = torch.mean(mixture_audio_stereo,1)
+            #from stereo [1,2, 9675225] to mono [1, 9675225] 
+            
+            self.logger.experiment.add_audio(
+                'test/mixture',
+                snd_tensor= mixture_audio_mono.detach().cpu().numpy(),
+                sample_rate=44100)            
+            #because snd_tensor need to be mono (1,L)
+            
+            #data visualising for audio
+            for i, audio in enumerate(self.sources):
+                label_stereo = sources[:,i] #from [1, 4, 2, 9675225] to [1, 2, 9675225]  
+                label_mono=torch.mean(label_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]  
+                self.logger.experiment.add_audio(
+                    f'test/label/{audio}',
+                    snd_tensor=label_mono.detach().cpu().numpy(),
+                    sample_rate=44100)  
+                
+                pred_stereo = estimate[:,i] #estimate [1, 4, 2, 9675225] to [1, 2, 9675225] 
+                pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+                self.logger.experiment.add_audio(
+                    f'test/pred/{audio}',
+                    snd_tensor=pred_mono.detach().cpu().numpy(),
+                    sample_rate=44100)              
+        
        
         return loss, nsdr       
 

@@ -20,6 +20,7 @@ from .states import capture_init
 from .spec import spectro, ispectro
 from .evaluate import new_sdr
 from . import augment
+import IPython
 
 
 class ScaledEmbedding(nn.Module):
@@ -886,12 +887,13 @@ class HDemucs(LightningModule):
     #   loss, reco, alid loss, nsdr
     def test_step(self,sources, batch_idx):
         from .apply import apply_model
-        # source 1, 5, 2, 7736477)
-        mix = sources[:, 0] 
-        sources = sources[:, 1:]         
+        # source : [1, 5, 2, 9675225]
+        mix = sources[:, 0] #only get mixture audio from the batch mix: [1, 2, 9675225]
+        sources = sources[:, 1:]   #[1, 4, 2, 9675225]
 
         if self.args.valid_apply:
             estimate = apply_model(self, mix, split=self.args.test.split, overlap=0)
+        # estimate [1, 4, 2, 9675225]
         
         # checking if the estimate has the correct shape
         assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
@@ -916,7 +918,7 @@ class HDemucs(LightningModule):
         losses['Test/loss'] = loss
         
         nsdrs = new_sdr(sources, estimate.detach()).mean(0)
-        #sources is each batch of daatset [tensor]
+        #sources is each batch of dataset [tensor]
         total = 0
         for source, nsdr, w in zip(self.sources, nsdrs, weights): 
         #self.sources is [str]
@@ -925,10 +927,37 @@ class HDemucs(LightningModule):
         losses['Test/nsdr'] = total / weights.sum()                
         
         self.log_dict( losses, on_step=False, on_epoch=True)
+        
+        #show the audio output in tensorboard
+        if batch_idx == 0:
+            mixture_audio_stereo = mix
+            #[1, 2, 9675225]            
+            mixture_audio_mono = torch.mean(mixture_audio_stereo,1)
+            #from stereo [1,2, 9675225] to mono [1, 9675225] 
+            
+            self.logger.experiment.add_audio(
+                'test/mixture',
+                snd_tensor= mixture_audio_mono.detach().cpu().numpy(),
+                sample_rate=44100)            
+            #because snd_tensor need to be mono (1,L)
+            
+            #data visualising for audio
+            for i, audio in enumerate(self.sources):
+                label_stereo = sources[:,i] #from [1, 4, 2, 9675225] to [1, 2, 9675225]  
+                label_mono=torch.mean(label_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]  
+                self.logger.experiment.add_audio(
+                    f'test/label/{audio}',
+                    snd_tensor=label_mono.detach().cpu().numpy(),
+                    sample_rate=44100)  
+                
+                pred_stereo = estimate[:,i] #estimate [1, 4, 2, 9675225] to [1, 2, 9675225] 
+                pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+                self.logger.experiment.add_audio(
+                    f'test/pred/{audio}',
+                    snd_tensor=pred_mono.detach().cpu().numpy(),
+                    sample_rate=44100)                                         
        
         return loss, nsdr       
-
-    #   loss, reco, valid loss, valid/nsdr    
     
     
     def configure_optimizers(self):
@@ -937,4 +966,5 @@ class HDemucs(LightningModule):
             betas=(self.args.optim.momentum, self.args.optim.beta2),
             weight_decay=self.args.optim.weight_decay)
         return optimizer
-
+    
+        
