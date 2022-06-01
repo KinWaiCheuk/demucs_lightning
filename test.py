@@ -57,6 +57,12 @@ def main(args):
                        segment=4 * args.dset.train.segment,
                        **args.demucs,
                        args=args)
+        model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint),
+                           sources=args.dset.sources,
+                           samplerate=args.samplerate,
+                           segment=4 * args.dset.train.segment,
+                           **args.demucs,
+                           args=args)
     
     elif args.model == 'HDemucs':
         model = HDemucs(sources=args.dset.sources,
@@ -64,20 +70,19 @@ def main(args):
                         segment=4 * args.dset.train.segment,
                         **args.hdemucs,
                         args=args)
+        model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint),
+                           sources=args.dset.sources,
+                           samplerate=args.samplerate,
+                           segment=4 * args.dset.train.segment,
+                           **args.hdemucs,
+                           args=args)
                         
     else:
         print('Invalid model, please choose Demucs or HDemucs')
         
     quantizer = get_quantizer(model, args.quant, model.optimizers)
     model.quantizer = quantizer #can use as self.quantizer in class Demucs
-    
-    model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint),
-                               sources=args.dset.sources,
-                               samplerate=args.samplerate,
-                               segment=4 * args.dset.train.segment,
-                               **args.hdemucs,
-                               args=args)
-    
+       
 
     name = f'Testing_{args.checkpoint.filename}'
     #file name shown in tensorboard logger
