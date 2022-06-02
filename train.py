@@ -5,7 +5,7 @@ from hydra.utils import to_absolute_path
 from demucs.demucs import Demucs
 from demucs.hdemucs import HDemucs
 from omegaconf import OmegaConf
-
+from pytorch_lightning.plugins import DDPPlugin
 
 # for dataset
 import hashlib
@@ -124,8 +124,8 @@ def main(args):
         print(f"Resume training from {args.trainer.resume_from_checkpoint}")
     trainer = pl.Trainer(**args.trainer,
                          callbacks=[checkpoint_callback, lr_monitor],
+                         plugins=DDPPlugin(find_unused_parameters=False),
                          logger=logger)
-
 
     trainer.fit(model, train_loader,valid_loader)
     trainer.test(model, test_loader)

@@ -239,6 +239,7 @@ checkpoint:
   
 trainer:
   gpus: ${gpus}
+  accelerator: 'ddp'
   precision: 32
   max_epochs: ${epochs}
   check_val_every_n_epoch: 1
