@@ -448,6 +448,7 @@ class HDemucs(LightningModule):
         self.samplerate = samplerate
         self.segment = segment
         self.args = args
+        self.save_hyperparameters()
         
         if args.data_augmentation:
             augments = [augment.Shift(shift=int(args.samplerate * args.dset.train.shift),
@@ -884,7 +885,7 @@ class HDemucs(LightningModule):
        
         return loss, nsdr       
 
-    #   loss, reco, alid loss, nsdr
+
     def test_step(self,sources, batch_idx):
         from .apply import apply_model
         # source : [1, 5, 2, 9675225]
@@ -967,4 +968,4 @@ class HDemucs(LightningModule):
             weight_decay=self.args.optim.weight_decay)
         return optimizer
     
-        
+ 

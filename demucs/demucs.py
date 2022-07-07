@@ -332,6 +332,7 @@ class Demucs(LightningModule):
         self.upsampler = Resample(1, 2)
         self.downsampler = Resample(2, 1)
         self.args = args
+        self.save_hyperparameters()
         
         if args.data_augmentation:
             augments = [augment.Shift(shift=int(args.samplerate * args.dset.train.shift),
