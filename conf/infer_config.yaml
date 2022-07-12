@@ -1,16 +1,9 @@
-data_root: '/workspace/helen/demucs_lightning'
-resume_checkpoint: '/workspace/helen/demucs_lightning/outputs/2022-07-11/18-00-09/HDemucs_experiment_epoch=10_augmentation=True/version_1/checkpoints/last.ckpt'
+checkpoint: null 
 samplerate: 44100
 model: HDemucs
-data_augmentation: true
-segment: 11
 gpus: 1
-epochs: 360
-seed: 42
-debug: false
-valid_apply: true
 
-infer_audio_folder_path: '/workspace/helen/demucs_lightning/inf_audio'
+infer_audio_folder_path: null
 infer_audio_ext: 'wav'
 infer_segment: 11
 infer_samplerate: ${samplerate}
@@ -29,29 +22,15 @@ trainer:
   gpus: ${gpus}
   accelerator: 'ddp'
   precision: 32
-  max_epochs: ${epochs}
   check_val_every_n_epoch: 1
-  resume_from_checkpoint: ${resume_checkpoint}
+  resume_from_checkpoint: ${checkpoint}
 
 dset:
     train:
         shift: 1
-    sources: ['drums', 'bass', 'other', 'vocals']
-    
-augment:
-  shift_same: false
-  repitch:
-    proba: 0.0
-    max_tempo: 12
-  remix:
-    proba: 1
-    group_size: 4
-  scale:
-    proba: 1
-    min: 0.25
-    max: 1.25
-  flip: true    
-    
+    sources: ['drums', 'bass', 'other', 'vocals']       
+
+data_augmentation: false
 demucs: # see demucs/demucs.py for a detailed description
   # Channels
   audio_channels: 2
