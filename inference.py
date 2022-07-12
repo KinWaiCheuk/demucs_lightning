@@ -55,11 +55,17 @@ def main(args):
                 audio_name.append(path.name)
             return audio_name
     
-    
+    if args.checkpoint==None:
+        raise ValueError("Please enter the path for your model checkpoint")
+               
+    if args.infer_audio_folder_path ==None:
+        raise ValueError("Please enter the path for your inference audio folder") 
+        
     inference_set = InferDataset(to_absolute_path(args.infer_audio_folder_path), args.infer_audio_ext, args.infer_samplerate)    
     inference_loader = DataLoader(inference_set, args.dataloader.inference.num_workers) 
     
     audio_name = inference_set.__getaudio_name__() 
+
     
     if args.model == 'Demucs':
         model = Demucs(sources=args.dset.sources,                    
@@ -67,7 +73,7 @@ def main(args):
                        segment=4 * args.infer_segment,
                        **args.demucs,
                        args=args)
-        model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint))
+        model = model.load_from_checkpoint(to_absolute_path(args.checkpoint))
         #call with pretrained model
                 
     elif args.model == 'HDemucs':
@@ -76,7 +82,7 @@ def main(args):
                         segment=4 * args.infer_segment,
                         **args.hdemucs,
                         args=args)
-        model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint))
+        model = model.load_from_checkpoint(to_absolute_path(args.checkpoint))
         
     else:
         print('Invalid model, please choose Demucs or HDemucs')    
