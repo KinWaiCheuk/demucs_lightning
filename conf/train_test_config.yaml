@@ -20,10 +20,6 @@ pretrained_repo:   # repo for pretrained model (default is official AWS)
 continue_best: true
 continue_opt: false
 
-inf_audio_folder_path: null
-inf_audio_ext: 'wav'
-inf_segment: 11
-
 max_batches:  # limit the number of batches per epoch, useful for debugging
               # or if your dataset is gigantic.
   
@@ -93,9 +89,6 @@ dataloader:
         batch_size: 1
         shuffle: False
         num_workers: 2
-        
-    inference:
-        num_workers: 1
         
 optim:
   lr: 3e-4

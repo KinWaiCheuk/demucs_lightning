@@ -31,7 +31,7 @@ from demucs.states import get_quantizer
 from AudioLoader.music.mss import MusdbHQ
 
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(config_path="conf", config_name="train_test_config")
 def main(args):    
     args.data_root = to_absolute_path(args.data_root) 
     
