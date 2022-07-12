@@ -15,13 +15,12 @@ from demucs.demucs import Demucs
 from demucs.hdemucs import HDemucs
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
 
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(config_path="conf", config_name="infer_config")
 def main(args):    
     
-    class InfDataset(Dataset):
+    class InferDataset(Dataset):
         def __init__(self,
                      audio_folder_path,
                      audio_ext,
@@ -57,15 +56,15 @@ def main(args):
             return audio_name
     
     
-    inference_set = InfDataset(args.inf_audio_folder_path, args.inf_audio_ext, args.samplerate)    
+    inference_set = InferDataset(to_absolute_path(args.infer_audio_folder_path), args.infer_audio_ext, args.infer_samplerate)    
     inference_loader = DataLoader(inference_set, args.dataloader.inference.num_workers) 
     
     audio_name = inference_set.__getaudio_name__() 
     
     if args.model == 'Demucs':
         model = Demucs(sources=args.dset.sources,                    
-                       samplerate=args.samplerate,
-                       segment=4 * args.inf_segment,
+                       samplerate=args.infer_samplerate,
+                       segment=4 * args.infer_segment,
                        **args.demucs,
                        args=args)
         model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint))
@@ -73,8 +72,8 @@ def main(args):
                 
     elif args.model == 'HDemucs':
         model = HDemucs(sources=args.dset.sources,
-                        samplerate=args.samplerate,
-                        segment=4 * args.inf_segment,
+                        samplerate=args.infer_samplerate,
+                        segment=4 * args.infer_segment,
                         **args.hdemucs,
                         args=args)
         model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint))
@@ -86,10 +85,7 @@ def main(args):
     model.quantizer = quantizer #can use as self.quantizer in class Demucs
     model.audio_name= audio_name
     
-    name = f'Inference_{args.checkpoint.filename}'
-    logger = TensorBoardLogger(save_dir=".", version=1, name=name)
-    trainer = pl.Trainer(**args.trainer,
-                         logger=logger)
+    trainer = pl.Trainer(**args.trainer)
 
     trainer.predict(model, dataloaders=inference_loader)
     
