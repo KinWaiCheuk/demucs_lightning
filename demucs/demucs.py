@@ -650,12 +650,9 @@ class Demucs(LightningModule):
                 self.logger.experiment.add_audio(
                     f'test/pred/{audio}',
                     snd_tensor=pred_mono.detach().cpu().numpy(),
-                    sample_rate=44100)              
-        
+                    sample_rate=44100)                      
        
-        return loss, nsdr       
-
-    #   loss, reco, alid loss, nsdr    
+        return loss, nsdr         
     
     
     def configure_optimizers(self):
@@ -665,6 +662,7 @@ class Demucs(LightningModule):
             weight_decay=self.args.optim.weight_decay)
         return optimizer
 
+    
     def load_state_dict(self, state, strict=True):
         # fix a mismatch with previous generation Demucs models.
         for idx in range(self.depth):
@@ -676,3 +674,22 @@ class Demucs(LightningModule):
                         state[new] = state.pop(old)
         super().load_state_dict(state, strict=strict)
 
+        
+    def predict_step(self, batch, batch_idx):                 
+        from .apply import apply_model
+              
+        estimate = apply_model(self, batch, split=True, overlap=0)
+        
+        for name in self.audio_name:  #list of audio name inside the inference folder       
+            for i, audio in enumerate(self.sources):
+                if os.path.isdir(os.path.join('./', name)) is not True:
+                    os.makedirs(os.path.join('./', name))    #os.makedirs(<path>)
+                    
+                else:    
+                    pred_stereo = estimate[:,i] #estimate [1, 4, 2, 9675225] to [1, 2, 9675225]             
+                    pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+
+                    #export the seperated audio by torchaudio.save(path, waveform, sample_rate)
+                    #Input tensor has to be 2D
+                    torchaudio.save(os.path.join('./', name, audio+'.wav'), pred_mono.detach().cpu(), self.args.samplerate)        
+        
