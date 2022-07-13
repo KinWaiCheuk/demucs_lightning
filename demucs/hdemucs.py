@@ -20,7 +20,8 @@ from .states import capture_init
 from .spec import spectro, ispectro
 from .evaluate import new_sdr
 from . import augment
-import IPython
+import torchaudio
+import os
 
 
 class ScaledEmbedding(nn.Module):
@@ -448,6 +449,7 @@ class HDemucs(LightningModule):
         self.samplerate = samplerate
         self.segment = segment
         self.args = args
+        self.save_hyperparameters()
         
         if args.data_augmentation:
             augments = [augment.Shift(shift=int(args.samplerate * args.dset.train.shift),
@@ -884,7 +886,7 @@ class HDemucs(LightningModule):
        
         return loss, nsdr       
 
-    #   loss, reco, alid loss, nsdr
+
     def test_step(self,sources, batch_idx):
         from .apply import apply_model
         # source : [1, 5, 2, 9675225]
@@ -966,5 +968,23 @@ class HDemucs(LightningModule):
             betas=(self.args.optim.momentum, self.args.optim.beta2),
             weight_decay=self.args.optim.weight_decay)
         return optimizer
-    
+  
+
+    def predict_step(self, batch, batch_idx):                 
+        from .apply import apply_model
+              
+        estimate = apply_model(self, batch, split=True, overlap=0)
         
+        for name in self.audio_name:  #list of audio name inside the inference folder       
+            for i, audio in enumerate(self.sources):
+                if os.path.isdir(os.path.join('./', name)) is not True:
+                    os.makedirs(os.path.join('./', name))    #os.makedirs(<path>)
+                    
+                else:    
+                    pred_stereo = estimate[:,i] #estimate [1, 4, 2, 9675225] to [1, 2, 9675225]             
+                    pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+
+                    #export the seperated audio by torchaudio.save(path, waveform, sample_rate)
+                    #Input tensor has to be 2D
+                    torchaudio.save(os.path.join('./', name, audio+'.wav'), pred_mono.detach().cpu(), self.args.samplerate)
+          

@@ -20,8 +20,6 @@ pretrained_repo:   # repo for pretrained model (default is official AWS)
 continue_best: true
 continue_opt: false
 
-
-
 max_batches:  # limit the number of batches per epoch, useful for debugging
               # or if your dataset is gigantic.
   
@@ -64,6 +62,7 @@ dset:
         ext: '.wav'    
     sources: ['drums', 'bass', 'other', 'vocals']
     wav:  # path to custom wav dataset
+    
 
 test:
   save: False

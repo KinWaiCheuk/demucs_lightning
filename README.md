@@ -10,13 +10,15 @@
 1. [Testing pretrained model](#Testing-pretrained-model)
 1. [Half-Precision Training](#Half-Precision-Training)
 1. [Default settings](#Default-settings)
+1. [Inferencing](#Inferencing)
 
 
 ## Introduction
 ```
 demucs_lightning
-├── conf
-│     ├─config.yaml
+├──conf
+│     ├─train_test_config.yaml
+│     ├─infer_config.yaml
 │     │
 │
 ├──demucs
@@ -24,7 +26,10 @@ demucs_lightning
 │     ├─hdemucs.py
 │     ├─other custome modules
 │
+├──requirements.txt
 ├──train.py
+├──test.py
+├──inference.py
 │   
 ```
 
@@ -55,7 +60,7 @@ pip install -r requirements.txt
 If it is your first time running the repo, you can use the argument `download=True` to automatically download and setup the `musdb18hq` dataset. Otherwise, you can omit this  argument.
 
 ### Demucs
-It requires `16,885 MB` of GPU memory. If you do not have enough GPU memory, please read [this section](#Training-with-a-small-GPU).
+It requires `16,885 MB` of GPU memory. If you do not have enough GPU memory, please read [this section](#Training-with-a-less-powerful-GPU).
 
 ```bash
 python train.py gpus=[0] model=Demucs download=True
@@ -110,12 +115,10 @@ You can use `test.py` to evaluate the pretrained model directly by using an exis
 python test.py resume_checkpoint='outputs/2022-05-24/21-20-17/Demucs_experiment_epoch=360_augmentation=True/version_1/checkpoints/e=123-TRAIN_loss=0.08.ckpt'
 ```
 
-
-
 ## Half-Precision Training
 By default, pytorch lightning uses 32-bit precision for training. To use 16-bit precision (half-precision), you can specify `trainer.precision`:
 
-```
+```bash
 python train.py trainer.precision=16
 ```
 
@@ -139,3 +142,17 @@ __samplerate__: The sampling rate for the audio. Default as `44100`.
 __epochs__: The number of epochs to train the model. Default as `360`.
 
 __optim.lr__: Learning rate of the optimizer. Default as `3e-4`.
+
+
+## Inferencing
+You are able to apply your trained model weight on your own audio file by using `inference.py`. Some nesscesary argument are the following:
+
+* `checkpoint` refers to the path of trained model weight checkpoint file
+* `infer_audio_folder_path` refers to the path of your audio folder where has all the audios inside
+* `infer_audio_ext` refer to the type of your audio. Default value is `'wav'`
+
+```bash
+python inference.py infer_audio_folder_path='../../infer_audio' checkpoint='outputs/2022-05-24/21-20-17/Demucs_experiment_epoch=360_augmentation=True/version_1/checkpoints/e=123-TRAIN_loss=0.08.ckpt'
+```
+
+By default, hydra saves all the seperated audio in the `outputs` folder.

@@ -31,7 +31,7 @@ from demucs.states import get_quantizer
 from AudioLoader.music.mss import MusdbHQ
 
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(config_path="conf", config_name="train_test_config")
 def main(args):    
     args.data_root = to_absolute_path(args.data_root) 
     
@@ -57,12 +57,7 @@ def main(args):
                        segment=4 * args.dset.train.segment,
                        **args.demucs,
                        args=args)
-        model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint),
-                           sources=args.dset.sources,
-                           samplerate=args.samplerate,
-                           segment=4 * args.dset.train.segment,
-                           **args.demucs,
-                           args=args)
+        model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint))
     
     elif args.model == 'HDemucs':
         model = HDemucs(sources=args.dset.sources,
@@ -70,12 +65,7 @@ def main(args):
                         segment=4 * args.dset.train.segment,
                         **args.hdemucs,
                         args=args)
-        model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint),
-                           sources=args.dset.sources,
-                           samplerate=args.samplerate,
-                           segment=4 * args.dset.train.segment,
-                           **args.hdemucs,
-                           args=args)
+        model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint))
                         
     else:
         print('Invalid model, please choose Demucs or HDemucs')
