@@ -29,7 +29,12 @@ def main(args):
             audiofolder = Path(audio_folder_path) #path of folder
             self.audio_path_list = list(audiofolder.glob(f'*.{audio_ext}'))  #path of audio
             self.sample_rate = sampling_rate
-
+            
+            self.audio_name =[]
+            for i in self.audio_path_list:
+                path = pathlib.PurePath(i)
+                self.audio_name.append(path.name)
+                
         def __len__(self):
             return len(self.audio_path_list)
 
@@ -45,15 +50,10 @@ def main(args):
             except:
                 waveform = torch.tensor([[]])
                 rate = 0
-                print(f"{self.audio_path_list[idx].name} is corrupted")  
-            return waveform
+                print(f"{self.audio_path_list[idx].name} is corrupted") 
+            audio_name = self.audio_name[idx] 
+            return waveform, audio_name
 
-        def __getaudio_name__(self):
-            audio_name =[]
-            for i in self.audio_path_list:
-                path = pathlib.PurePath(i)
-                audio_name.append(path.name)
-            return audio_name
     
     if args.checkpoint==None:
         raise ValueError("Please enter the path for your model checkpoint")
@@ -64,32 +64,19 @@ def main(args):
     inference_set = InferDataset(to_absolute_path(args.infer_audio_folder_path), args.infer_audio_ext, args.infer_samplerate)    
     inference_loader = DataLoader(inference_set, args.dataloader.inference.num_workers) 
     
-    audio_name = inference_set.__getaudio_name__() 
-
     
     if args.model == 'Demucs':
-        model = Demucs(sources=args.dset.sources,                    
-                       samplerate=args.infer_samplerate,
-                       segment=4 * args.infer_segment,
-                       **args.demucs,
-                       args=args)
-        model = model.load_from_checkpoint(to_absolute_path(args.checkpoint))
+        model = Demucs.load_from_checkpoint(to_absolute_path(args.checkpoint))
         #call with pretrained model
                 
     elif args.model == 'HDemucs':
-        model = HDemucs(sources=args.dset.sources,
-                        samplerate=args.infer_samplerate,
-                        segment=4 * args.infer_segment,
-                        **args.hdemucs,
-                        args=args)
-        model = model.load_from_checkpoint(to_absolute_path(args.checkpoint))
+        model = HDemucs.load_from_checkpoint(to_absolute_path(args.checkpoint))
         
     else:
         print('Invalid model, please choose Demucs or HDemucs')    
-        
+    
     quantizer = get_quantizer(model, args.quant, model.optimizers)
     model.quantizer = quantizer #can use as self.quantizer in class Demucs
-    model.audio_name= audio_name
     
     trainer = pl.Trainer(**args.trainer)
 

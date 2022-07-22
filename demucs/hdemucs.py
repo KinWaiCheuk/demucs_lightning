@@ -450,7 +450,17 @@ class HDemucs(LightningModule):
         self.segment = segment
         self.args = args
         self.save_hyperparameters()
+                
+        sources_to_idx= {'drums':0, 
+                         'bass':1,
+                         'other':2,
+                         'vocals':3}    #dict to map source type to index   
         
+        self.idx_list = []              #users provide customer sources:list, convert source type to idx:list
+        for source in self.sources:
+            idx = sources_to_idx[source]
+            self.idx_list.append(idx)
+            
         if args.data_augmentation:
             augments = [augment.Shift(shift=int(args.samplerate * args.dset.train.shift),
                                       same=args.augment.shift_same)]
@@ -581,7 +591,7 @@ class HDemucs(LightningModule):
 
         if rescale:
             rescale_module(self, reference=rescale)
-
+    
     def _spec(self, x):
         hl = self.hop_length
         nfft = self.nfft
@@ -784,24 +794,36 @@ class HDemucs(LightningModule):
         The original code can be found here
         https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/solver.py#L290
         """
-        #sources (list[str]): list of source names
+        #self.sources (list[str]): list of source names
+        #train_loader provide a batch of tracks with 4 sources
         if self.args.data_augmentation:    
-            sources = self.augment(sources) #[B, num_sources, 2, 44100*segment_length]
+            sources = self.augment(sources) #sources: [B, 4sources, 2, 44100*segment_length]
         
-        mix = sources.sum(dim=1)
-        estimate = self(mix) #[B, num_sources, 2, 44100*segment_length]
-        # TODO # sources = self.model.transform_target(mix, sources)
+        mix = sources.sum(dim=1)  #mix: [B, 2channel, 441000]
+ 
+        estimate = self(mix) #estimate [B, num_sources from user, 2, 44100*segment_length]
+        
+        #custom sources list 
+        #only calculate the loss of user sources list
+        selected_sources = sources.index_select(1, torch.tensor(self.idx_list).to(sources.device))
 
         # checking if the estimate has the correct shape
-        assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
+        assert estimate.shape == selected_sources.shape,(estimate.shape, selected_sources.shape)
         dims = tuple(range(2, sources.dim()))
-
+              
+        
         if self.args.optim.loss == 'l1':
-            loss = F.l1_loss(estimate, sources, reduction='none')
+            loss = F.l1_loss(
+                        estimate, 
+                        selected_sources,
+                        reduction='none')
             loss = loss.mean(dims).mean(0)
             reco = loss
         elif self.args.optim.loss == 'mse':
-            loss = F.mse_loss(estimate, sources, reduction='none')
+            loss = F.mse_loss(
+                        estimate, 
+                        selected_sources,
+                        reduction='none')
             loss = loss.mean(dims)
             reco = loss**0.5
             reco = reco.mean(0)
@@ -844,7 +866,7 @@ class HDemucs(LightningModule):
 
     def validation_step(self,sources, batch_idx):
         from .apply import apply_model
-        # source 1, 5, 2, 7736477)
+        # source 1, mixture+ number of sources, 2, 7736477)
         mix = sources[:, 0] 
         sources = sources[:, 1:]         
 
@@ -970,21 +992,21 @@ class HDemucs(LightningModule):
         return optimizer
   
 
-    def predict_step(self, batch, batch_idx):                 
+    def predict_step(self, batch, batch_idx):     #dataloader return each batch: waveform:tensor, (audio_name:str)         
         from .apply import apply_model
               
-        estimate = apply_model(self, batch, split=True, overlap=0)
+        estimate = apply_model(self, batch[0], split=True, overlap=0) #estimate: [1, num_sources, 2, 9675225]
         
-        for name in self.audio_name:  #list of audio name inside the inference folder       
-            for i, audio in enumerate(self.sources):
-                if os.path.isdir(os.path.join('./', name)) is not True:
-                    os.makedirs(os.path.join('./', name))    #os.makedirs(<path>)
-                    
-                else:    
-                    pred_stereo = estimate[:,i] #estimate [1, 4, 2, 9675225] to [1, 2, 9675225]             
-                    pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+        #os.makedirs(<path>)  
+        #make dir to store separated tracks inside 
+        # './' refer to pytorch lightning_outputs folder location
+        os.makedirs(os.path.join('./', (batch[1][0])))        
 
-                    #export the seperated audio by torchaudio.save(path, waveform, sample_rate)
-                    #Input tensor has to be 2D
-                    torchaudio.save(os.path.join('./', name, audio+'.wav'), pred_mono.detach().cpu(), self.args.samplerate)
+        for i, audio in enumerate(self.sources):                
+            pred_stereo = estimate[:,i] #pred_stereo: [1, 2, 9675225]             
+            pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+
+            #export the seperated audio by torchaudio.save(path, waveform, sample_rate)
+            #Input tensor has to be 2D
+            torchaudio.save(os.path.join('./', (batch[1][0]), audio+'.wav'), pred_mono.detach().cpu(), self.args.samplerate)
           
