@@ -1,4 +1,4 @@
-checkpoint: null 
+checkpoint: null
 samplerate: 44100
 model: HDemucs
 gpus: 1
@@ -27,8 +27,7 @@ trainer:
 
 dset:
     train:
-        shift: 1
-    sources: ['drums', 'bass', 'other', 'vocals']       
+        shift: 1     
 
 data_augmentation: false
 demucs: # see demucs/demucs.py for a detailed description
