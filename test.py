@@ -37,6 +37,7 @@ def main(args):
     
     test_set = MusdbHQ(root = args.dset.test.root, 
                        subset= 'test', 
+                       sources=args.dset.test.sources,
                        download = args.dset.test.download, 
                        segment= args.dset.test.segment, 
                        shift= args.dset.test.shift, 
@@ -52,7 +53,7 @@ def main(args):
                              num_workers=args.dataloader.test.num_workers, drop_last=False)
     
     if args.model == 'Demucs':
-        model = Demucs(sources=args.dset.sources,                    
+        model = Demucs(sources=args.sources,                    
                        samplerate=args.samplerate,
                        segment=4 * args.dset.train.segment,
                        **args.demucs,
@@ -60,7 +61,7 @@ def main(args):
         model = model.load_from_checkpoint(to_absolute_path(args.resume_checkpoint))
     
     elif args.model == 'HDemucs':
-        model = HDemucs(sources=args.dset.sources,
+        model = HDemucs(sources=args.sources,
                         samplerate=args.samplerate,
                         segment=4 * args.dset.train.segment,
                         **args.hdemucs,

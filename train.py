@@ -16,17 +16,9 @@ import os
 import tqdm
 import torchaudio as ta
 
-# #library for class Wavset
-# from collections import OrderedDict
-# import math
-# import torch as th
-# import julius
-# from torch.nn import functional as F
-
 #library for loader()
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader, Subset
-
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -35,6 +27,8 @@ import sys
 from demucs.states import get_quantizer
 
 #library for Musdb dataset
+import sys
+sys.path.insert(0, '/workspace/helen/AudioLoader')
 from AudioLoader.music.mss import MusdbHQ
 
 
@@ -43,6 +37,8 @@ def main(args):
     args.data_root = to_absolute_path(args.data_root) 
     train_set = MusdbHQ(root = args.dset.train.root, 
                         subset= 'training', 
+                        sources= ['drums', 'bass', 'other', 'vocals'], 
+                        #have to be 4 sourcse, to make mix in training_step  #mix = sources.sum(dim=1)
                         download = args.dset.train.download, 
                         segment= args.dset.train.segment, 
                         shift= args.dset.train.shift, 
@@ -53,6 +49,7 @@ def main(args):
 
     valid_set = MusdbHQ(root = args.dset.valid.root, 
                         subset= 'validation', 
+                        sources=args.dset.valid.sources,
                         download = args.dset.valid.download, 
                         segment= args.dset.valid.segment, 
                         shift= args.dset.valid.shift, 
@@ -63,6 +60,7 @@ def main(args):
     
     test_set = MusdbHQ(root = args.dset.test.root, 
                        subset= 'test', 
+                       sources=args.dset.test.sources,
                        download = args.dset.test.download, 
                        segment= args.dset.test.segment, 
                        shift= args.dset.test.shift, 
@@ -87,14 +85,14 @@ def main(args):
                              num_workers=args.dataloader.test.num_workers, drop_last=False)
     
     if args.model == 'Demucs':
-        model = Demucs(sources=args.dset.sources,                    
+        model = Demucs(sources=args.sources,                    
                        samplerate=args.samplerate,
                        segment=4 * args.dset.train.segment,
                        **args.demucs,
                        args=args)
     
     elif args.model == 'HDemucs':
-        model = HDemucs(sources=args.dset.sources,
+        model = HDemucs(sources=args.sources,
                         samplerate=args.samplerate,
                         segment=4 * args.dset.train.segment,
                         **args.hdemucs,
@@ -105,7 +103,7 @@ def main(args):
         
     quantizer = get_quantizer(model, args.quant, model.optimizers)
     model.quantizer = quantizer #can use as self.quantizer in class Demucs
-    
+            
 #     print(f'optimizer = {model.optimizers}')
     
 #     print(f'len train_set= {len(train_set)}') #len train_set= 18368

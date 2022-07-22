@@ -19,6 +19,7 @@ continue_pretrained:   # signature of a pretrained XP, this cannot be a bag of m
 pretrained_repo:   # repo for pretrained model (default is official AWS)
 continue_best: true
 continue_opt: false
+sources: ['drums', 'bass', 'other', 'vocals']
 
 max_batches:  # limit the number of batches per epoch, useful for debugging
               # or if your dataset is gigantic.
@@ -44,6 +45,7 @@ dset:
         ext: '.wav'         
     valid:
         root: ${data_root}
+        sources: ${sources}
         download: False
         segment: Null 
         shift: Null
@@ -53,6 +55,7 @@ dset:
         ext: '.wav'        
     test:
         root: ${data_root}
+        sources: ${sources}
         download: False
         segment: Null
         shift: Null
@@ -60,7 +63,6 @@ dset:
         samplerate: ${samplerate}
         channels: 2
         ext: '.wav'    
-    sources: ['drums', 'bass', 'other', 'vocals']
     wav:  # path to custom wav dataset
     
 
