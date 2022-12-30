@@ -248,6 +248,13 @@ trainer:
   check_val_every_n_epoch: 1
   resume_from_checkpoint: ${resume_checkpoint}
 
+#logger: wandb
+logger: tensorboard
+
+wandb:
+  # Optional
+  #entity: yourusername
+
 # Hydra config
 hydra:
   job_logging:

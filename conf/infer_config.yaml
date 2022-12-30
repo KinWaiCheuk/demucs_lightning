@@ -27,6 +27,13 @@ trainer:
   check_val_every_n_epoch: 1
   resume_from_checkpoint: ${checkpoint}
 
+#logger: wandb
+logger: tensorboard
+
+wandb:
+  # Optional
+  #entity: yourusername
+
 dset:
     train:
         shift: 1     

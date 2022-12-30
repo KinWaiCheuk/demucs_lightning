@@ -57,6 +57,13 @@ You can install all required libraries at once via
 pip install -r requirements.txt
 ```
 
+## Logging
+
+TensorBoard logging is used by default. If you want to use the
+WandbLogger instead (recommended!), either edit `logger` in
+`conf/train_test_config.yaml` or postpend `logger=wandb` to all
+your commands.
+
 ## Training
 If it is your first time running the repo, you can use the argument `download=True` to automatically download and setup the `musdb18hq` dataset. Otherwise, you can omit this  argument.
 
