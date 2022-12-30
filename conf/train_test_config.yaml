@@ -6,7 +6,7 @@ model: HDemucs
 data_augmentation: true
 segment: 11
 batch_size: 4
-gpus: 1
+devices: -1
 epochs: 360
 seed: 42
 debug: false
@@ -239,8 +239,8 @@ checkpoint:
   every_n_epochs: 1
   
 trainer:
-  gpus: ${gpus}
-  accelerator: 'ddp'
+  devices: ${devices}
+  accelerator: auto
   precision: 32
   max_epochs: ${epochs}
   check_val_every_n_epoch: 1
