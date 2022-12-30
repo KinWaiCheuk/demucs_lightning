@@ -240,6 +240,8 @@ checkpoint:
   
 trainer:
   devices: ${devices}
+  # Pick only available GPUs
+  auto_select_gpus: True
   accelerator: auto
   precision: 32
   max_epochs: ${epochs}
