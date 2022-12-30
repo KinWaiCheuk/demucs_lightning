@@ -1,7 +1,7 @@
 checkpoint: null
 samplerate: 44100
 model: HDemucs
-gpus: 1
+devices: 1
 
 infer_audio_folder_path: null
 infer_audio_ext: 'wav'
@@ -19,8 +19,10 @@ quant:  # quantization hyper params
   group_size: 8        
 
 trainer:
-  gpus: ${gpus}
-  accelerator: 'ddp'
+  devices: ${devices}
+  # Pick only available GPUs
+  auto_select_gpus: True
+  accelerator: auto
   precision: 32
   check_val_every_n_epoch: 1
   resume_from_checkpoint: ${checkpoint}
