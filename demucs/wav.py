@@ -5,23 +5,23 @@
 # LICENSE file in the root directory of this source tree.
 """Loading wav based datasets, including MusdbHQ."""
 
-from collections import OrderedDict
 import hashlib
-import math
 import json
+import math
 import os
+from collections import OrderedDict
 from pathlib import Path
-import tqdm
 
-import musdb
 import julius
+import musdb
 import torch as th
-from torch import distributed
 import torchaudio as ta
+import tqdm
+from torch import distributed
 from torch.nn import functional as F
 
-from .audio import convert_audio_channels
 from . import distrib
+from .audio import convert_audio_channels
 
 MIXTURE = "mixture"
 EXT = ".wav"
@@ -46,11 +46,13 @@ def _track_metadata(track, sources, normalize=True, ext=EXT):
         elif track_length != length:
             raise ValueError(
                 f"Invalid length for file {file}: "
-                f"expecting {track_length} but got {length}.")
+                f"expecting {track_length} but got {length}."
+            )
         elif info.sample_rate != track_samplerate:
             raise ValueError(
                 f"Invalid sample rate for file {file}: "
-                f"expecting {track_samplerate} but got {info.sample_rate}.")
+                f"expecting {track_samplerate} but got {info.sample_rate}."
+            )
         if source == MIXTURE and normalize:
             try:
                 wav, _ = ta.load(str(file))
@@ -80,13 +82,16 @@ def build_metadata(path, sources, normalize=True, ext=EXT):
     path = Path(path)
     pendings = []
     from concurrent.futures import ThreadPoolExecutor
+
     with ThreadPoolExecutor(8) as pool:
         for root, folders, files in os.walk(path, followlinks=True):
             root = Path(root)
-            if root.name.startswith('.') or folders or root == path:
+            if root.name.startswith(".") or folders or root == path:
                 continue
             name = str(root.relative_to(path))
-            pendings.append((name, pool.submit(_track_metadata, root, sources, normalize, ext)))
+            pendings.append(
+                (name, pool.submit(_track_metadata, root, sources, normalize, ext))
+            )
             # meta[name] = _track_metadata(root, sources, normalize, ext)
         for name, pending in tqdm.tqdm(pendings, ncols=120):
             meta[name] = pending.result()
@@ -95,10 +100,17 @@ def build_metadata(path, sources, normalize=True, ext=EXT):
 
 class Wavset:
     def __init__(
-            self,
-            root, metadata, sources,
-            segment=None, shift=None, normalize=True,
-            samplerate=44100, channels=2, ext=EXT):
+        self,
+        root,
+        metadata,
+        sources,
+        segment=None,
+        shift=None,
+        normalize=True,
+        samplerate=44100,
+        channels=2,
+        ext=EXT,
+    ):
         """
         Waveset (or mp3 set for that matter). Can be used to train
         with arbitrary sources. Each track should be one folder inside of `path`.
@@ -131,11 +143,13 @@ class Wavset:
         self.ext = ext
         self.num_examples = []
         for name, meta in self.metadata.items():
-            track_duration = meta['length'] / meta['samplerate']
+            track_duration = meta["length"] / meta["samplerate"]
             if segment is None or track_duration < segment:
                 examples = 1
             else:
-                examples = int(math.ceil((track_duration - self.segment) / self.shift) + 1)
+                examples = int(
+                    math.ceil((track_duration - self.segment) / self.shift) + 1
+                )
             self.num_examples.append(examples)
 
     def __len__(self):
@@ -153,8 +167,8 @@ class Wavset:
             num_frames = -1
             offset = 0
             if self.segment is not None:
-                offset = int(meta['samplerate'] * self.shift * index)
-                num_frames = int(math.ceil(meta['samplerate'] * self.segment))
+                offset = int(meta["samplerate"] * self.shift * index)
+                num_frames = int(math.ceil(meta["samplerate"] * self.segment))
             wavs = []
             for source in self.sources:
                 file = self.get_file(name, source)
@@ -163,9 +177,9 @@ class Wavset:
                 wavs.append(wav)
 
             example = th.stack(wavs)
-            example = julius.resample_frac(example, meta['samplerate'], self.samplerate)
+            example = julius.resample_frac(example, meta["samplerate"], self.samplerate)
             if self.normalize:
-                example = (example - meta['mean']) / meta['std']
+                example = (example - meta["mean"]) / meta["std"]
             if self.segment:
                 length = int(self.segment * self.samplerate)
                 example = example[..., :length]
@@ -176,7 +190,7 @@ class Wavset:
 def get_wav_datasets(args):
     """Extract the wav datasets from the XP arguments."""
     sig = hashlib.sha1(str(args.wav).encode()).hexdigest()[:8]
-    metadata_file = Path(args.metadata) / ('wav_' + sig + ".json")
+    metadata_file = Path(args.metadata) / ("wav_" + sig + ".json")
     train_path = Path(args.wav) / "train"
     valid_path = Path(args.wav) / "valid"
     if not metadata_file.is_file() and distrib.rank == 0:
@@ -190,29 +204,42 @@ def get_wav_datasets(args):
     if args.full_cv:
         kw_cv = {}
     else:
-        kw_cv = {'segment': args.segment, 'shift': args.shift}
-    train_set = Wavset(train_path, train, args.sources,
-                       segment=args.segment, shift=args.shift,
-                       samplerate=args.samplerate, channels=args.channels,
-                       normalize=args.normalize)
-    valid_set = Wavset(valid_path, valid, [MIXTURE] + list(args.sources),
-                       samplerate=args.samplerate, channels=args.channels,
-                       normalize=args.normalize, **kw_cv)
+        kw_cv = {"segment": args.segment, "shift": args.shift}
+    train_set = Wavset(
+        train_path,
+        train,
+        args.sources,
+        segment=args.segment,
+        shift=args.shift,
+        samplerate=args.samplerate,
+        channels=args.channels,
+        normalize=args.normalize,
+    )
+    valid_set = Wavset(
+        valid_path,
+        valid,
+        [MIXTURE] + list(args.sources),
+        samplerate=args.samplerate,
+        channels=args.channels,
+        normalize=args.normalize,
+        **kw_cv,
+    )
     return train_set, valid_set
 
 
 def _get_musdb_valid():
     # Return musdb valid set.
     import yaml
-    setup_path = Path(musdb.__path__[0]) / 'configs' / 'mus.yaml'
-    setup = yaml.safe_load(open(setup_path, 'r'))
-    return setup['validation_tracks']
+
+    setup_path = Path(musdb.__path__[0]) / "configs" / "mus.yaml"
+    setup = yaml.safe_load(open(setup_path, "r"))
+    return setup["validation_tracks"]
 
 
 def get_musdb_wav_datasets(args):
     """Extract the musdb dataset from the XP arguments."""
     sig = hashlib.sha1(str(args.musdb).encode()).hexdigest()[:8]
-    metadata_file = Path(args.metadata) / ('musdb_' + sig + ".json")
+    metadata_file = Path(args.metadata) / ("musdb_" + sig + ".json")
     root = Path(args.musdb) / "train"
     if not metadata_file.is_file() and distrib.rank == 0:
         metadata_file.parent.mkdir(exist_ok=True, parents=True)
@@ -226,17 +253,33 @@ def get_musdb_wav_datasets(args):
     if args.train_valid:
         metadata_train = metadata
     else:
-        metadata_train = {name: meta for name, meta in metadata.items() if name not in valid_tracks}
-    metadata_valid = {name: meta for name, meta in metadata.items() if name in valid_tracks}
+        metadata_train = {
+            name: meta for name, meta in metadata.items() if name not in valid_tracks
+        }
+    metadata_valid = {
+        name: meta for name, meta in metadata.items() if name in valid_tracks
+    }
     if args.full_cv:
         kw_cv = {}
     else:
-        kw_cv = {'segment': args.segment, 'shift': args.shift}
-    train_set = Wavset(root, metadata_train, args.sources,
-                       segment=args.segment, shift=args.shift,
-                       samplerate=args.samplerate, channels=args.channels,
-                       normalize=args.normalize)
-    valid_set = Wavset(root, metadata_valid, [MIXTURE] + list(args.sources),
-                       samplerate=args.samplerate, channels=args.channels,
-                       normalize=args.normalize, **kw_cv)
+        kw_cv = {"segment": args.segment, "shift": args.shift}
+    train_set = Wavset(
+        root,
+        metadata_train,
+        args.sources,
+        segment=args.segment,
+        shift=args.shift,
+        samplerate=args.samplerate,
+        channels=args.channels,
+        normalize=args.normalize,
+    )
+    valid_set = Wavset(
+        root,
+        metadata_valid,
+        [MIXTURE] + list(args.sources),
+        samplerate=args.samplerate,
+        channels=args.channels,
+        normalize=args.normalize,
+        **kw_cv,
+    )
     return train_set, valid_set

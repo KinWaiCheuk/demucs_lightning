@@ -4,12 +4,12 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from collections import defaultdict
-from contextlib import contextmanager
 import math
 import os
 import tempfile
 import typing as tp
+from collections import defaultdict
+from contextlib import contextmanager
 
 import torch
 from torch.nn import functional as F
@@ -28,7 +28,7 @@ def unfold(a, kernel_size, stride):
     tgt_length = (n_frames - 1) * stride + kernel_size
     a = F.pad(a, (0, tgt_length - length))
     strides = list(a.stride())
-    assert strides[-1] == 1, 'data should be contiguous'
+    assert strides[-1] == 1, "data should be contiguous"
     strides = strides[:-1] + [stride, 1]
     return a.as_strided([*shape, n_frames, kernel_size], strides)
 
@@ -48,7 +48,7 @@ def center_trim(tensor: torch.Tensor, reference: tp.Union[torch.Tensor, int]):
     if delta < 0:
         raise ValueError("tensor must be larger than reference. " f"Delta is {delta}.")
     if delta:
-        tensor = tensor[..., delta // 2:-(delta - delta // 2)]
+        tensor = tensor[..., delta // 2 : -(delta - delta // 2)]
     return tensor
 
 
@@ -80,19 +80,20 @@ def EMA(beta: float = 1):
             total[key] = total[key] * beta + weight * float(value)
             fix[key] = fix[key] * beta + weight
         return {key: tot / fix[key] for key, tot in total.items()}
+
     return _update
 
 
-def sizeof_fmt(num: float, suffix: str = 'B'):
+def sizeof_fmt(num: float, suffix: str = "B"):
     """
     Given `num` bytes, return human readable size.
     Taken from https://stackoverflow.com/a/1094933
     """
-    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
         if abs(num) < 1024.0:
             return "%3.1f%s%s" % (num, unit, suffix)
         num /= 1024.0
-    return "%.1f%s%s" % (num, 'Yi', suffix)
+    return "%.1f%s%s" % (num, "Yi", suffix)
 
 
 @contextmanager

@@ -7,17 +7,24 @@
 """
 
 import logging
-from pathlib import Path
 import typing as tp
+from pathlib import Path
 
 from dora.log import fatal
 
 from .hdemucs import HDemucs
-from .repo import RemoteRepo, LocalRepo, ModelOnlyRepo, BagOnlyRepo, AnyModelRepo, ModelLoadingError  # noqa
+from .repo import (
+    AnyModelRepo,
+    BagOnlyRepo,
+    LocalRepo,  # noqa
+    ModelLoadingError,
+    ModelOnlyRepo,
+    RemoteRepo,
+)
 
 logger = logging.getLogger(__name__)
 ROOT_URL = "https://dl.fbaipublicfiles.com/demucs/mdx_final/"
-REMOTE_ROOT = Path(__file__).parent / 'remote'
+REMOTE_ROOT = Path(__file__).parent / "remote"
 
 SOURCES = ["drums", "bass", "other", "vocals"]
 
@@ -30,24 +37,32 @@ def demucs_unittest():
 def add_model_flags(parser):
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument("-s", "--sig", help="Locally trained XP signature.")
-    group.add_argument("-n", "--name", default="mdx_extra_q",
-                       help="Pretrained model name or signature. Default is mdx_extra_q.")
-    parser.add_argument("--repo", type=Path,
-                        help="Folder containing all pre-trained models for use with -n.")
+    group.add_argument(
+        "-n",
+        "--name",
+        default="mdx_extra_q",
+        help="Pretrained model name or signature. Default is mdx_extra_q.",
+    )
+    parser.add_argument(
+        "--repo",
+        type=Path,
+        help="Folder containing all pre-trained models for use with -n.",
+    )
 
 
-def get_model(name: str,
-              repo: tp.Optional[Path] = None):
+def get_model(name: str, repo: tp.Optional[Path] = None):
     """`name` must be a bag of models name or a pretrained signature
     from the remote AWS model repo or the specified local repo if `repo` is not None.
     """
-    if name == 'demucs_unittest':
+    if name == "demucs_unittest":
         return demucs_unittest()
     model_repo: ModelOnlyRepo
     if repo is None:
-        remote_files = [line.strip()
-                        for line in (REMOTE_ROOT / 'files.txt').read_text().split('\n')
-                        if line.strip()]
+        remote_files = [
+            line.strip()
+            for line in (REMOTE_ROOT / "files.txt").read_text().split("\n")
+            if line.strip()
+        ]
         model_repo = RemoteRepo(ROOT_URL, remote_files)
         bag_repo = BagOnlyRepo(REMOTE_ROOT, model_repo)
     else:

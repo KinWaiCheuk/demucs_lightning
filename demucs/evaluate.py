@@ -9,20 +9,20 @@ or the newest SDR definition from the MDX 2021 competition (this one will
 be reported as `nsdr` for `new sdr`).
 """
 
-from concurrent import futures
 import logging
+from concurrent import futures
 
-from dora.log import LogProgress
-import numpy as np
 import musdb
 import museval
+import numpy as np
 import torch as th
+from dora.log import LogProgress
+
+from . import distrib
 
 # from .apply import apply_model
 from .audio import convert_audio, save_audio
-from . import distrib
 from .utils import DummyPoolExecutor
-
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +55,14 @@ def eval_track(references, estimates, win, hop, compute_sdr=True):
         references = references.numpy()
         estimates = estimates.numpy()
         scores = museval.metrics.bss_eval(
-            references, estimates,
+            references,
+            estimates,
             compute_permutation=False,
             window=win,
             hop=hop,
             framewise_filters=False,
-            bsseval_sources_version=False)[:-1]
+            bsseval_sources_version=False,
+        )[:-1]
         return scores, new_scores
 
 
@@ -70,6 +72,7 @@ def evaluate(solver, compute_sdr=False):
     `new_only` means using only the MDX definition of the SDR, which is much faster to evaluate.
     """
     from .apply import apply_model
+
     args = solver.args
 
     output_dir = solver.folder / "results"
@@ -84,15 +87,14 @@ def evaluate(solver, compute_sdr=False):
         test_set = musdb.DB(args.test.nonhq, subsets=["test"], is_wav=False)
     src_rate = args.dset.musdb_samplerate
 
-    eval_device = 'cpu'
+    eval_device = "cpu"
 
     model = solver.model
-    win = int(1. * model.samplerate)
-    hop = int(1. * model.samplerate)
+    win = int(1.0 * model.samplerate)
+    hop = int(1.0 * model.samplerate)
 
     indexes = range(distrib.rank, len(test_set), distrib.world_size)
-    indexes = LogProgress(logger, indexes, updates=args.misc.num_prints,
-                          name='Eval')
+    indexes = LogProgress(logger, indexes, updates=args.misc.num_prints, name="Eval")
     pendings = []
 
     pool = futures.ProcessPoolExecutor if args.test.workers else DummyPoolExecutor
@@ -107,37 +109,57 @@ def evaluate(solver, compute_sdr=False):
             ref = mix.mean(dim=0)  # mono mixture
             mix = (mix - ref.mean()) / ref.std()
             mix = convert_audio(mix, src_rate, model.samplerate, model.audio_channels)
-            estimates = apply_model(model, mix[None],
-                                    shifts=args.test.shifts, split=args.test.split,
-                                    overlap=args.test.overlap)[0]
+            estimates = apply_model(
+                model,
+                mix[None],
+                shifts=args.test.shifts,
+                split=args.test.split,
+                overlap=args.test.overlap,
+            )[0]
             estimates = estimates * ref.std() + ref.mean()
             estimates = estimates.to(eval_device)
 
             references = th.stack(
-                [th.from_numpy(track.targets[name].audio).t() for name in model.sources])
+                [th.from_numpy(track.targets[name].audio).t() for name in model.sources]
+            )
             if references.dim() == 2:
                 references = references[:, None]
             references = references.to(eval_device)
-            references = convert_audio(references, src_rate,
-                                       model.samplerate, model.audio_channels)
+            references = convert_audio(
+                references, src_rate, model.samplerate, model.audio_channels
+            )
             if args.test.save:
                 folder = solver.folder / "wav" / track.name
                 folder.mkdir(exist_ok=True, parents=True)
                 for name, estimate in zip(model.sources, estimates):
-                    save_audio(estimate.cpu(), folder / (name + ".mp3"), model.samplerate)
+                    save_audio(
+                        estimate.cpu(), folder / (name + ".mp3"), model.samplerate
+                    )
 
-            pendings.append((track.name, pool.submit(
-                eval_track, references, estimates, win=win, hop=hop, compute_sdr=compute_sdr)))
+            pendings.append(
+                (
+                    track.name,
+                    pool.submit(
+                        eval_track,
+                        references,
+                        estimates,
+                        win=win,
+                        hop=hop,
+                        compute_sdr=compute_sdr,
+                    ),
+                )
+            )
 
-        pendings = LogProgress(logger, pendings, updates=args.misc.num_prints,
-                               name='Eval (BSS)')
+        pendings = LogProgress(
+            logger, pendings, updates=args.misc.num_prints, name="Eval (BSS)"
+        )
         tracks = {}
         for track_name, pending in pendings:
             pending = pending.result()
             scores, nsdrs = pending
             tracks[track_name] = {}
             for idx, target in enumerate(model.sources):
-                tracks[track_name][target] = {'nsdr': [float(nsdrs[idx])]}
+                tracks[track_name][target] = {"nsdr": [float(nsdrs[idx])]}
             if scores is not None:
                 (sdr, isr, sir, sar) = scores
                 for idx, target in enumerate(model.sources):
@@ -145,7 +167,7 @@ def evaluate(solver, compute_sdr=False):
                         "SDR": sdr[idx].tolist(),
                         "SIR": sir[idx].tolist(),
                         "ISR": isr[idx].tolist(),
-                        "SAR": sar[idx].tolist()
+                        "SAR": sar[idx].tolist(),
                     }
                     tracks[track_name][target].update(values)
 
@@ -161,7 +183,8 @@ def evaluate(solver, compute_sdr=False):
             for source in model.sources:
                 medians = [
                     np.nanmedian(all_tracks[track][source][metric_name])
-                    for track in all_tracks.keys()]
+                    for track in all_tracks.keys()
+                ]
                 mean = np.mean(medians)
                 median = np.median(medians)
                 result[metric_name.lower() + "_" + source] = mean

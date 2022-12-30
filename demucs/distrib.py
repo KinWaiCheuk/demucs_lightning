@@ -10,11 +10,10 @@ import pickle
 
 import numpy as np
 import torch
-from torch.utils.data.distributed import DistributedSampler
-from torch.utils.data import DataLoader, Subset
-from torch.nn.parallel.distributed import DistributedDataParallel
-
 from dora import distrib as dora_distrib
+from torch.nn.parallel.distributed import DistributedDataParallel
+from torch.utils.data import DataLoader, Subset
+from torch.utils.data.distributed import DistributedSampler
 
 logger = logging.getLogger(__name__)
 rank = 0
@@ -29,14 +28,14 @@ def init():
     world_size = dora_distrib.world_size()
 
 
-def average(metrics, count=1.):
+def average(metrics, count=1.0):
     if isinstance(metrics, dict):
         keys, values = zip(*sorted(metrics.items()))
         values = average(values, count)
         return dict(zip(keys, values))
     if world_size == 1:
         return metrics
-    tensor = torch.tensor(list(metrics) + [1], device='cuda', dtype=torch.float32)
+    tensor = torch.tensor(list(metrics) + [1], device="cuda", dtype=torch.float32)
     tensor *= count
     torch.distributed.all_reduce(tensor, op=torch.distributed.ReduceOp.SUM)
     return (tensor[:-1] / tensor[-1]).cpu().numpy().tolist()
@@ -50,7 +49,8 @@ def wrap(model):
             model,
             # find_unused_parameters=True,
             device_ids=[torch.cuda.current_device()],
-            output_device=torch.cuda.current_device())
+            output_device=torch.cuda.current_device(),
+        )
 
 
 def barrier():
@@ -61,7 +61,7 @@ def barrier():
 def share(obj=None, src=0):
     if world_size == 1:
         return obj
-    size = torch.empty(1, device='cuda', dtype=torch.long)
+    size = torch.empty(1, device="cuda", dtype=torch.long)
     if rank == src:
         dump = pickle.dumps(obj)
         size[0] = len(dump)
@@ -71,7 +71,7 @@ def share(obj=None, src=0):
     if rank == src:
         buffer = torch.from_numpy(np.frombuffer(dump, dtype=np.uint8).copy()).cuda()
     else:
-        buffer = torch.empty(size[0].item(), device='cuda', dtype=torch.uint8)
+        buffer = torch.empty(size[0].item(), device="cuda", dtype=torch.uint8)
     torch.distributed.broadcast(buffer, src=src)
     # buffer variable is now set to pickled obj in all processes
 
