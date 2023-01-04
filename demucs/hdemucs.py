@@ -6,22 +6,22 @@
 """
 This code contains the spectrogram and Hybrid version of Demucs.
 """
-from copy import deepcopy
 import math
+import os
+from copy import deepcopy
 
-from openunmix.filtering import wiener
 import torch
+import torchaudio
+from openunmix.filtering import wiener
+from pytorch_lightning.core.lightning import LightningModule
 from torch import nn
 from torch.nn import functional as F
-from pytorch_lightning.core.lightning import LightningModule
 
-from .demucs import DConv, rescale_module
-from .states import capture_init
-from .spec import spectro, ispectro
-from .evaluate import new_sdr
 from . import augment
-import torchaudio
-import os
+from .demucs import DConv, rescale_module
+from .evaluate import new_sdr
+from .spec import ispectro, spectro
+from .states import capture_init
 
 
 class ScaledEmbedding(nn.Module):
@@ -29,14 +29,18 @@ class ScaledEmbedding(nn.Module):
     Boost learning rate for embeddings (with `scale`).
     Also, can make embeddings continuous with `smooth`.
     """
-    def __init__(self, num_embeddings: int, embedding_dim: int,
-                 scale: float = 10., smooth=False):
+
+    def __init__(
+        self, num_embeddings: int, embedding_dim: int, scale: float = 10.0, smooth=False
+    ):
         super().__init__()
         self.embedding = nn.Embedding(num_embeddings, embedding_dim)
         if smooth:
             weight = torch.cumsum(self.embedding.weight.data, dim=0)
             # when summing gaussian, overscale raises as sqrt(n), so we nornalize by that.
-            weight = weight / torch.arange(1, num_embeddings + 1).to(weight).sqrt()[:, None]
+            weight = (
+                weight / torch.arange(1, num_embeddings + 1).to(weight).sqrt()[:, None]
+            )
             self.embedding.weight.data[:] = weight
         self.embedding.weight.data /= scale
         self.scale = scale
@@ -51,9 +55,22 @@ class ScaledEmbedding(nn.Module):
 
 
 class HEncLayer(nn.Module):
-    def __init__(self, chin, chout, kernel_size=8, stride=4, norm_groups=1, empty=False,
-                 freq=True, dconv=True, norm=True, context=0, dconv_kw={}, pad=True,
-                 rewrite=True):
+    def __init__(
+        self,
+        chin,
+        chout,
+        kernel_size=8,
+        stride=4,
+        norm_groups=1,
+        empty=False,
+        freq=True,
+        dconv=True,
+        norm=True,
+        context=0,
+        dconv_kw={},
+        pad=True,
+        rewrite=True,
+    ):
         """Encoder layer. This used both by the time and the frequency branch.
 
         Args:
@@ -150,6 +167,7 @@ class MultiWrap(nn.Module):
     This is a bit over-engineered to avoid edge artifacts when splitting
     the frequency bands, but it is possible the naive implementation would work as well...
     """
+
     def __init__(self, layer, split_ratios):
         """
         Args:
@@ -172,7 +190,7 @@ class MultiWrap(nn.Module):
             else:
                 lay.pad = False
             for m in lay.modules():
-                if hasattr(m, 'reset_parameters'):
+                if hasattr(m, "reset_parameters"):
                     m.reset_parameters()
             self.layers.append(lay)
 
@@ -218,13 +236,14 @@ class MultiWrap(nn.Module):
                 s = skip[:, :, start:limit]
                 out, _ = layer(y, s, None)
                 if outs:
-                    outs[-1][:, :, -layer.stride:] += (
-                        out[:, :, :layer.stride] - layer.conv_tr.bias.view(1, -1, 1, 1))
-                    out = out[:, :, layer.stride:]
+                    outs[-1][:, :, -layer.stride :] += out[
+                        :, :, : layer.stride
+                    ] - layer.conv_tr.bias.view(1, -1, 1, 1)
+                    out = out[:, :, layer.stride :]
                 if ratio == 1:
-                    out = out[:, :, :-layer.stride // 2, :]
+                    out = out[:, :, : -layer.stride // 2, :]
                 if start == 0:
-                    out = out[:, :, layer.stride // 2:, :]
+                    out = out[:, :, layer.stride // 2 :, :]
                 outs.append(out)
                 layer.last = last
                 start = limit
@@ -238,9 +257,24 @@ class MultiWrap(nn.Module):
 
 
 class HDecLayer(nn.Module):
-    def __init__(self, chin, chout, last=False, kernel_size=8, stride=4, norm_groups=1, empty=False,
-                 freq=True, dconv=True, norm=True, context=1, dconv_kw={}, pad=True,
-                 context_freq=True, rewrite=True):
+    def __init__(
+        self,
+        chin,
+        chout,
+        last=False,
+        kernel_size=8,
+        stride=4,
+        norm_groups=1,
+        empty=False,
+        freq=True,
+        dconv=True,
+        norm=True,
+        context=1,
+        dconv_kw={},
+        pad=True,
+        context_freq=True,
+        rewrite=True,
+    ):
         """
         Same as HEncLayer but for decoder. See `HEncLayer` for documentation.
         """
@@ -277,8 +311,9 @@ class HDecLayer(nn.Module):
             if context_freq:
                 self.rewrite = klass(chin, 2 * chin, 1 + 2 * context, 1, context)
             else:
-                self.rewrite = klass(chin, 2 * chin, [1, 1 + 2 * context], 1,
-                                     [0, context])
+                self.rewrite = klass(
+                    chin, 2 * chin, [1, 1 + 2 * context], 1, [0, context]
+                )
             self.norm1 = norm_fn(2 * chin)
 
         self.dconv = None
@@ -310,9 +345,9 @@ class HDecLayer(nn.Module):
         z = self.norm2(self.conv_tr(y))
         if self.freq:
             if self.pad:
-                z = z[..., self.pad:-self.pad, :]
+                z = z[..., self.pad : -self.pad, :]
         else:
-            z = z[..., self.pad:self.pad + length]
+            z = z[..., self.pad : self.pad + length]
             assert z.shape[-1] == length, (z.shape[-1], length)
         if not self.last:
             z = F.gelu(z)
@@ -346,53 +381,56 @@ class HDemucs(LightningModule):
 
     Unlike classic Demucs, there is no resampling here, and normalization is always applied.
     """
+
     @capture_init
-    def __init__(self,
-                 sources,
-                 # Channels
-                 audio_channels=2,
-                 channels=48,
-                 channels_time=None,
-                 growth=2,
-                 # STFT
-                 nfft=4096,
-                 wiener_iters=0,
-                 end_iters=0,
-                 wiener_residual=False,
-                 cac=True,
-                 # Main structure
-                 depth=6,
-                 rewrite=True,
-                 hybrid=True,
-                 hybrid_old=False,
-                 # Frequency branch
-                 multi_freqs=None,
-                 multi_freqs_depth=2,
-                 freq_emb=0.2,
-                 emb_scale=10,
-                 emb_smooth=True,
-                 # Convolutions
-                 kernel_size=8,
-                 time_stride=2,
-                 stride=4,
-                 context=1,
-                 context_enc=0,
-                 # Normalization
-                 norm_starts=4,
-                 norm_groups=4,
-                 # DConv residual branch
-                 dconv_mode=1,
-                 dconv_depth=2,
-                 dconv_comp=4,
-                 dconv_attn=4,
-                 dconv_lstm=4,
-                 dconv_init=1e-4,
-                 # Weight init
-                 rescale=0.1,
-                 # Metadata
-                 samplerate=44100,
-                 segment=4 * 10,
-                 args=None):
+    def __init__(
+        self,
+        sources,
+        # Channels
+        audio_channels=2,
+        channels=48,
+        channels_time=None,
+        growth=2,
+        # STFT
+        nfft=4096,
+        wiener_iters=0,
+        end_iters=0,
+        wiener_residual=False,
+        cac=True,
+        # Main structure
+        depth=6,
+        rewrite=True,
+        hybrid=True,
+        hybrid_old=False,
+        # Frequency branch
+        multi_freqs=None,
+        multi_freqs_depth=2,
+        freq_emb=0.2,
+        emb_scale=10,
+        emb_smooth=True,
+        # Convolutions
+        kernel_size=8,
+        time_stride=2,
+        stride=4,
+        context=1,
+        context_enc=0,
+        # Normalization
+        norm_starts=4,
+        norm_groups=4,
+        # DConv residual branch
+        dconv_mode=1,
+        dconv_depth=2,
+        dconv_comp=4,
+        dconv_attn=4,
+        dconv_lstm=4,
+        dconv_init=1e-4,
+        # Weight init
+        rescale=0.1,
+        # Metadata
+        samplerate=44100,
+        segment=4 * 10,
+        args=None,
+    ):
         """
         Args:
             sources (list[str]): list of source names.
@@ -450,27 +488,35 @@ class HDemucs(LightningModule):
         self.segment = segment
         self.args = args
         self.save_hyperparameters()
-                
-        sources_to_idx= {'drums':0, 
-                         'bass':1,
-                         'other':2,
-                         'vocals':3}    #dict to map source type to index   
-        
-        self.idx_list = []              #users provide customer sources:list, convert source type to idx:list
+
+        sources_to_idx = {
+            "drums": 0,
+            "bass": 1,
+            "other": 2,
+            "vocals": 3,
+        }  # dict to map source type to index
+
+        self.idx_list = (
+            []
+        )  # users provide customer sources:list, convert source type to idx:list
         for source in self.sources:
             idx = sources_to_idx[source]
             self.idx_list.append(idx)
-            
+
         if args.data_augmentation:
-            augments = [augment.Shift(shift=int(args.samplerate * args.dset.train.shift),
-                                      same=args.augment.shift_same)]
+            augments = [
+                augment.Shift(
+                    shift=int(args.samplerate * args.dset.train.shift),
+                    same=args.augment.shift_same,
+                )
+            ]
             if args.augment.flip:
                 augments += [augment.FlipChannels(), augment.FlipSign()]
-            for aug in ['scale', 'remix']:
+            for aug in ["scale", "remix"]:
                 kw = getattr(args.augment, aug)
                 if kw.proba:
                     augments.append(getattr(augment, aug.capitalize())(**kw))
-            self.augment = torch.nn.Sequential(*augments)           
+            self.augment = torch.nn.Sequential(*augments)
 
         self.nfft = nfft
         self.hop_length = nfft // 4
@@ -519,42 +565,49 @@ class HDemucs(LightningModule):
                 last_freq = True
 
             kw = {
-                'kernel_size': ker,
-                'stride': stri,
-                'freq': freq,
-                'pad': pad,
-                'norm': norm,
-                'rewrite': rewrite,
-                'norm_groups': norm_groups,
-                'dconv_kw': {
-                    'lstm': lstm,
-                    'attn': attn,
-                    'depth': dconv_depth,
-                    'compress': dconv_comp,
-                    'init': dconv_init,
-                    'gelu': True,
-                }
+                "kernel_size": ker,
+                "stride": stri,
+                "freq": freq,
+                "pad": pad,
+                "norm": norm,
+                "rewrite": rewrite,
+                "norm_groups": norm_groups,
+                "dconv_kw": {
+                    "lstm": lstm,
+                    "attn": attn,
+                    "depth": dconv_depth,
+                    "compress": dconv_comp,
+                    "init": dconv_init,
+                    "gelu": True,
+                },
             }
             kwt = dict(kw)
-            kwt['freq'] = 0
-            kwt['kernel_size'] = kernel_size
-            kwt['stride'] = stride
-            kwt['pad'] = True
+            kwt["freq"] = 0
+            kwt["kernel_size"] = kernel_size
+            kwt["stride"] = stride
+            kwt["pad"] = True
             kw_dec = dict(kw)
             multi = False
             if multi_freqs and index < multi_freqs_depth:
                 multi = True
-                kw_dec['context_freq'] = False
+                kw_dec["context_freq"] = False
 
             if last_freq:
                 chout_z = max(chout, chout_z)
                 chout = chout_z
 
-            enc = HEncLayer(chin_z, chout_z,
-                            dconv=dconv_mode & 1, context=context_enc, **kw)
+            enc = HEncLayer(
+                chin_z, chout_z, dconv=dconv_mode & 1, context=context_enc, **kw
+            )
             if hybrid and freq:
-                tenc = HEncLayer(chin, chout, dconv=dconv_mode & 1, context=context_enc,
-                                 empty=last_freq, **kwt)
+                tenc = HEncLayer(
+                    chin,
+                    chout,
+                    dconv=dconv_mode & 1,
+                    context=context_enc,
+                    empty=last_freq,
+                    **kwt,
+                )
                 self.tencoder.append(tenc)
 
             if multi:
@@ -565,13 +618,26 @@ class HDemucs(LightningModule):
                 chin_z = chin
                 if self.cac:
                     chin_z *= 2
-            dec = HDecLayer(chout_z, chin_z, dconv=dconv_mode & 2,
-                            last=index == 0, context=context, **kw_dec)
+            dec = HDecLayer(
+                chout_z,
+                chin_z,
+                dconv=dconv_mode & 2,
+                last=index == 0,
+                context=context,
+                **kw_dec,
+            )
             if multi:
                 dec = MultiWrap(dec, multi_freqs)
             if hybrid and freq:
-                tdec = HDecLayer(chout, chin, dconv=dconv_mode & 2, empty=last_freq,
-                                 last=index == 0, context=context, **kwt)
+                tdec = HDecLayer(
+                    chout,
+                    chin,
+                    dconv=dconv_mode & 2,
+                    empty=last_freq,
+                    last=index == 0,
+                    context=context,
+                    **kwt,
+                )
                 self.tdecoder.insert(0, tdec)
             self.decoder.insert(0, dec)
 
@@ -586,12 +652,13 @@ class HDemucs(LightningModule):
                     freqs //= stride
             if index == 0 and freq_emb:
                 self.freq_emb = ScaledEmbedding(
-                    freqs, chin_z, smooth=emb_smooth, scale=emb_scale)
+                    freqs, chin_z, smooth=emb_smooth, scale=emb_scale
+                )
                 self.freq_emb_scale = freq_emb
 
         if rescale:
             rescale_module(self, reference=rescale)
-    
+
     def _spec(self, x):
         hl = self.hop_length
         nfft = self.nfft
@@ -609,18 +676,18 @@ class HDemucs(LightningModule):
             le = int(math.ceil(x.shape[-1] / hl))
             pad = hl // 2 * 3
             if not self.hybrid_old:
-                x = F.pad(x, (pad, pad + le * hl - x.shape[-1]), mode='reflect')
+                x = F.pad(x, (pad, pad + le * hl - x.shape[-1]), mode="reflect")
             else:
                 x = F.pad(x, (pad, pad + le * hl - x.shape[-1]))
 
         z = spectro(x, nfft, hl)[..., :-1, :]
         if self.hybrid:
             assert z.shape[-1] == le + 4, (z.shape, x.shape, le)
-            z = z[..., 2:2+le]
+            z = z[..., 2 : 2 + le]
         return z
 
     def _ispec(self, z, length=None, scale=0):
-        hl = self.hop_length // (4 ** scale)
+        hl = self.hop_length // (4**scale)
         z = F.pad(z, (0, 0, 0, 1))
         if self.hybrid:
             z = F.pad(z, (2, 2))
@@ -631,7 +698,7 @@ class HDemucs(LightningModule):
                 le = hl * int(math.ceil(length / hl))
             x = ispectro(z, hl, length=le)
             if not self.hybrid_old:
-                x = x[..., pad:pad + length]
+                x = x[..., pad : pad + length]
             else:
                 x = x[..., :length]
         else:
@@ -683,8 +750,11 @@ class HDemucs(LightningModule):
             for pos in range(0, T, wiener_win_len):
                 frame = slice(pos, pos + wiener_win_len)
                 z_out = wiener(
-                    mag_out[sample, frame], mix_stft[sample, frame], niters,
-                    residual=residual)
+                    mag_out[sample, frame],
+                    mix_stft[sample, frame],
+                    niters,
+                    residual=residual,
+                )
                 out.append(z_out.transpose(-1, -2))
             outs.append(torch.cat(out, dim=0))
         out = torch.view_as_complex(torch.stack(outs, 0))
@@ -794,36 +864,38 @@ class HDemucs(LightningModule):
         The original code can be found here
         https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/solver.py#L290
         """
-        #self.sources (list[str]): list of source names
-        #train_loader provide a batch of tracks with 4 sources
-        if self.args.data_augmentation:    
-            sources = self.augment(sources) #sources: [B, 4sources, 2, 44100*segment_length]
-        
-        mix = sources.sum(dim=1)  #mix: [B, 2channel, 441000]
- 
-        estimate = self(mix) #estimate [B, num_sources from user, 2, 44100*segment_length]
-        
-        #custom sources list 
-        #only calculate the loss of user sources list
-        selected_sources = sources.index_select(1, torch.tensor(self.idx_list).to(sources.device))
+        # self.sources (list[str]): list of source names
+        # train_loader provide a batch of tracks with 4 sources
+        if self.args.data_augmentation:
+            sources = self.augment(
+                sources
+            )  # sources: [B, 4sources, 2, 44100*segment_length]
+
+        mix = sources.sum(dim=1)  # mix: [B, 2channel, 441000]
+
+        estimate = self(
+            mix
+        )  # estimate [B, num_sources from user, 2, 44100*segment_length]
+
+        # custom sources list
+        # only calculate the loss of user sources list
+        selected_sources = sources.index_select(
+            1, torch.tensor(self.idx_list).to(sources.device)
+        )
 
         # checking if the estimate has the correct shape
-        assert estimate.shape == selected_sources.shape,(estimate.shape, selected_sources.shape)
+        assert estimate.shape == selected_sources.shape, (
+            estimate.shape,
+            selected_sources.shape,
+        )
         dims = tuple(range(2, sources.dim()))
-              
-        
-        if self.args.optim.loss == 'l1':
-            loss = F.l1_loss(
-                        estimate, 
-                        selected_sources,
-                        reduction='none')
+
+        if self.args.optim.loss == "l1":
+            loss = F.l1_loss(estimate, selected_sources, reduction="none")
             loss = loss.mean(dims).mean(0)
             reco = loss
-        elif self.args.optim.loss == 'mse':
-            loss = F.mse_loss(
-                        estimate, 
-                        selected_sources,
-                        reduction='none')
+        elif self.args.optim.loss == "mse":
+            loss = F.mse_loss(estimate, selected_sources, reduction="none")
             loss = loss.mean(dims)
             reco = loss**0.5
             reco = reco.mean(0)
@@ -836,53 +908,51 @@ class HDemucs(LightningModule):
         # self.quantizer = get_quantizer(self, args.quant, self.optimizer)
         # quantization: get self.quantizer from train.py
         ms = 0
-        #ms: model size
+        # ms: model size
         if self.quantizer is not None:
             ms = self.quantizer.model_size()
         if self.args.quant.diffq:
             loss += args.quant.diffq * ms
-            #use ms to calculate loss
+            # use ms to calculate loss
 
-        
         losses = {}
-        losses['TRAIN/reco'] = (reco * weights).sum() / weights.sum()
-        losses['TRAIN/ms'] = ms
-       
-    
-        # penality
-        if self.args.svd.penalty > 0:            
-            kw = dict(args.svd)
-            kw.pop('penalty')
-            penalty = svd_penalty(self, **kw)
-            losses['penalty'] = penalty
-            loss += args.svd.penalty * penalty
-        losses['TRAIN/loss'] = loss
-        
-        self.log_dict(losses, on_step=False, on_epoch=True)
-        #log(graph title, take acc as data, on_step: plot every step, on_epch: plot every epoch)
-        
-        return loss
-   
+        losses["TRAIN/reco"] = (reco * weights).sum() / weights.sum()
+        losses["TRAIN/ms"] = ms
 
-    def validation_step(self,sources, batch_idx):
+        # penality
+        if self.args.svd.penalty > 0:
+            kw = dict(args.svd)
+            kw.pop("penalty")
+            penalty = svd_penalty(self, **kw)
+            losses["penalty"] = penalty
+            loss += args.svd.penalty * penalty
+        losses["TRAIN/loss"] = loss
+
+        self.log_dict(losses, on_step=False, on_epoch=True)
+        # log(graph title, take acc as data, on_step: plot every step, on_epch: plot every epoch)
+
+        return loss
+
+    def validation_step(self, sources, batch_idx):
         from .apply import apply_model
+
         # source 1, mixture+ number of sources, 2, 7736477)
-        mix = sources[:, 0] 
-        sources = sources[:, 1:]         
+        mix = sources[:, 0]
+        sources = sources[:, 1:]
 
         if self.args.valid_apply:
             estimate = apply_model(self, mix, split=self.args.test.split, overlap=0)
-        
+
         # checking if the estimate has the correct shape
         assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
         dims = tuple(range(2, sources.dim()))
 
-        if self.args.optim.loss == 'l1':
-            loss = F.l1_loss(estimate, sources, reduction='none')
+        if self.args.optim.loss == "l1":
+            loss = F.l1_loss(estimate, sources, reduction="none")
             loss = loss.mean(dims).mean(0)
             reco = loss
-        elif self.args.optim.loss == 'mse':
-            loss = F.mse_loss(estimate, sources, reduction='none')
+        elif self.args.optim.loss == "mse":
+            loss = F.mse_loss(estimate, sources, reduction="none")
             loss = loss.mean(dims)
             reco = loss**0.5
             reco = reco.mean(0)
@@ -891,44 +961,46 @@ class HDemucs(LightningModule):
 
         weights = torch.tensor(self.args.weights).to(sources)
         loss = (loss * weights).sum() / weights.sum()
-        
+
         losses = {}
-        losses['VAL/loss'] = loss
-        
+        losses["VAL/loss"] = loss
+
         nsdrs = new_sdr(sources, estimate.detach()).mean(0)
-        #sources is each batch of daatset [tensor]
+        # sources is each batch of daatset [tensor]
         total = 0
-        for source, nsdr, w in zip(self.sources, nsdrs, weights): 
-        #self.sources is [str]
-            losses[f'VAL/nsdr_{source}'] = nsdr
+        for source, nsdr, w in zip(self.sources, nsdrs, weights):
+            # self.sources is [str]
+            losses[f"VAL/nsdr_{source}"] = nsdr
             total += w * nsdr
-        losses['VAL/nsdr'] = total / weights.sum()                
-        
-        self.log_dict( losses, on_step=False, on_epoch=True)
-       
-        return loss, nsdr       
+        losses["VAL/nsdr"] = total / weights.sum()
 
+        self.log_dict(losses, on_step=False, on_epoch=True)
 
-    def test_step(self,sources, batch_idx):
+        return loss, nsdr
+
+    def test_step(self, sources, batch_idx):
         from .apply import apply_model
+
         # source : [1, 5, 2, 9675225]
-        mix = sources[:, 0] #only get mixture audio from the batch mix: [1, 2, 9675225]
-        sources = sources[:, 1:]   #[1, 4, 2, 9675225]
+        mix = sources[
+            :, 0
+        ]  # only get mixture audio from the batch mix: [1, 2, 9675225]
+        sources = sources[:, 1:]  # [1, 4, 2, 9675225]
 
         if self.args.valid_apply:
             estimate = apply_model(self, mix, split=self.args.test.split, overlap=0)
         # estimate [1, 4, 2, 9675225]
-        
+
         # checking if the estimate has the correct shape
         assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
         dims = tuple(range(2, sources.dim()))
 
-        if self.args.optim.loss == 'l1':
-            loss = F.l1_loss(estimate, sources, reduction='none')
+        if self.args.optim.loss == "l1":
+            loss = F.l1_loss(estimate, sources, reduction="none")
             loss = loss.mean(dims).mean(0)
             reco = loss
-        elif self.args.optim.loss == 'mse':
-            loss = F.mse_loss(estimate, sources, reduction='none')
+        elif self.args.optim.loss == "mse":
+            loss = F.mse_loss(estimate, sources, reduction="none")
             loss = loss.mean(dims)
             reco = loss**0.5
             reco = reco.mean(0)
@@ -937,76 +1009,96 @@ class HDemucs(LightningModule):
 
         weights = torch.tensor(self.args.weights).to(sources)
         loss = (loss * weights).sum() / weights.sum()
-        
+
         losses = {}
-        losses['Test/loss'] = loss
-        
+        losses["Test/loss"] = loss
+
         nsdrs = new_sdr(sources, estimate.detach()).mean(0)
-        #sources is each batch of dataset [tensor]
+        # sources is each batch of dataset [tensor]
         total = 0
-        for source, nsdr, w in zip(self.sources, nsdrs, weights): 
-        #self.sources is [str]
-            losses[f'Test/nsdr_{source}'] = nsdr
+        for source, nsdr, w in zip(self.sources, nsdrs, weights):
+            # self.sources is [str]
+            losses[f"Test/nsdr_{source}"] = nsdr
             total += w * nsdr
-        losses['Test/nsdr'] = total / weights.sum()                
-        
-        self.log_dict( losses, on_step=False, on_epoch=True)
-        
-        #show the audio output in tensorboard
+        losses["Test/nsdr"] = total / weights.sum()
+
+        self.log_dict(losses, on_step=False, on_epoch=True)
+
+        # show the audio output in tensorboard
         if batch_idx == 0:
             mixture_audio_stereo = mix
-            #[1, 2, 9675225]            
-            mixture_audio_mono = torch.mean(mixture_audio_stereo,1)
-            #from stereo [1,2, 9675225] to mono [1, 9675225] 
-            
+            # [1, 2, 9675225]
+            mixture_audio_mono = torch.mean(mixture_audio_stereo, 1)
+            # from stereo [1,2, 9675225] to mono [1, 9675225]
+
             self.logger.experiment.add_audio(
-                'test/mixture',
-                snd_tensor= mixture_audio_mono.detach().cpu().numpy(),
-                sample_rate=44100)            
-            #because snd_tensor need to be mono (1,L)
-            
-            #data visualising for audio
+                "test/mixture",
+                snd_tensor=mixture_audio_mono.detach().cpu().numpy(),
+                sample_rate=44100,
+            )
+            # because snd_tensor need to be mono (1,L)
+
+            # data visualising for audio
             for i, audio in enumerate(self.sources):
-                label_stereo = sources[:,i] #from [1, 4, 2, 9675225] to [1, 2, 9675225]  
-                label_mono=torch.mean(label_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]  
+                label_stereo = sources[
+                    :, i
+                ]  # from [1, 4, 2, 9675225] to [1, 2, 9675225]
+                label_mono = torch.mean(
+                    label_stereo, 1
+                )  # from stereo[1, 2, 9675225] to mono [1, 9675225]
                 self.logger.experiment.add_audio(
-                    f'test/label/{audio}',
+                    f"test/label/{audio}",
                     snd_tensor=label_mono.detach().cpu().numpy(),
-                    sample_rate=44100)  
-                
-                pred_stereo = estimate[:,i] #estimate [1, 4, 2, 9675225] to [1, 2, 9675225] 
-                pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+                    sample_rate=44100,
+                )
+
+                pred_stereo = estimate[
+                    :, i
+                ]  # estimate [1, 4, 2, 9675225] to [1, 2, 9675225]
+                pred_mono = torch.mean(
+                    pred_stereo, 1
+                )  # from stereo[1, 2, 9675225] to mono [1, 9675225]
                 self.logger.experiment.add_audio(
-                    f'test/pred/{audio}',
+                    f"test/pred/{audio}",
                     snd_tensor=pred_mono.detach().cpu().numpy(),
-                    sample_rate=44100)                                         
-       
-        return loss, nsdr       
-    
-    
+                    sample_rate=44100,
+                )
+
+        return loss, nsdr
+
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.args.optim.lr,
+            self.parameters(),
+            lr=self.args.optim.lr,
             betas=(self.args.optim.momentum, self.args.optim.beta2),
-            weight_decay=self.args.optim.weight_decay)
+            weight_decay=self.args.optim.weight_decay,
+        )
         return optimizer
-  
 
-    def predict_step(self, batch, batch_idx):     #dataloader return each batch: waveform:tensor, (audio_name:str)         
+    def predict_step(
+        self, batch, batch_idx
+    ):  # dataloader return each batch: waveform:tensor, (audio_name:str)
         from .apply import apply_model
-              
-        estimate = apply_model(self, batch[0], split=True, overlap=0) #estimate: [1, num_sources, 2, 9675225]
-        
-        #os.makedirs(<path>)  
-        #make dir to store separated tracks inside 
+
+        estimate = apply_model(
+            self, batch[0], split=True, overlap=0
+        )  # estimate: [1, num_sources, 2, 9675225]
+
+        # os.makedirs(<path>)
+        # make dir to store separated tracks inside
         # './' refer to pytorch lightning_outputs folder location
-        os.makedirs(os.path.join('./', (batch[1][0])))        
+        os.makedirs(os.path.join("./", (batch[1][0])))
 
-        for i, audio in enumerate(self.sources):                
-            pred_stereo = estimate[:,i] #pred_stereo: [1, 2, 9675225]             
-            pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+        for i, audio in enumerate(self.sources):
+            pred_stereo = estimate[:, i]  # pred_stereo: [1, 2, 9675225]
+            pred_mono = torch.mean(
+                pred_stereo, 1
+            )  # from stereo[1, 2, 9675225] to mono [1, 9675225]
 
-            #export the seperated audio by torchaudio.save(path, waveform, sample_rate)
-            #Input tensor has to be 2D
-            torchaudio.save(os.path.join('./', (batch[1][0]), audio+'.wav'), pred_mono.detach().cpu(), self.args.samplerate)
-          
+            # export the seperated audio by torchaudio.save(path, waveform, sample_rate)
+            # Input tensor has to be 2D
+            torchaudio.save(
+                os.path.join("./", (batch[1][0]), audio + ".wav"),
+                pred_mono.detach().cpu(),
+                self.args.samplerate,
+            )

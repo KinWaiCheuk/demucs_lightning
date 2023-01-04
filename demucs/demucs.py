@@ -5,23 +5,22 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+import os
+import sys
 import typing as tp
 
 import torch
+import torchaudio
+from pytorch_lightning.core.lightning import LightningModule
 from torch import nn
 from torch.nn import functional as F
 from torchaudio.transforms import Resample
-from pytorch_lightning.core.lightning import LightningModule
 
-from .states import capture_init, get_quantizer
-from .utils import center_trim, unfold
-from .svd import svd_penalty
-from .evaluate import new_sdr
 from . import augment
-
-import sys
-import torchaudio
-import os
+from .evaluate import new_sdr
+from .states import capture_init, get_quantizer
+from .svd import svd_penalty
+from .utils import center_trim, unfold
 
 
 class BLSTM(nn.Module):
@@ -30,11 +29,14 @@ class BLSTM(nn.Module):
     If `max_steps` is not None, input will be splitting in overlapping
     chunks and the LSTM applied separately on each chunk.
     """
+
     def __init__(self, dim, layers=1, max_steps=None, skip=False):
         super().__init__()
         assert max_steps is None or max_steps % 4 == 0
         self.max_steps = max_steps
-        self.lstm = nn.LSTM(bidirectional=True, num_layers=layers, hidden_size=dim, input_size=dim)
+        self.lstm = nn.LSTM(
+            bidirectional=True, num_layers=layers, hidden_size=dim, input_size=dim
+        )
         self.linear = nn.Linear(2 * dim, dim)
         self.skip = skip
 
@@ -75,10 +77,9 @@ class BLSTM(nn.Module):
 
 
 def rescale_conv(conv, reference):
-    """Rescale initial weight scale. It is unclear why it helps but it certainly does.
-    """
+    """Rescale initial weight scale. It is unclear why it helps but it certainly does."""
     std = conv.weight.std().detach()
-    scale = (std / reference)**0.5
+    scale = (std / reference) ** 0.5
     conv.weight.data /= scale
     if conv.bias is not None:
         conv.bias.data /= scale
@@ -86,7 +87,9 @@ def rescale_conv(conv, reference):
 
 def rescale_module(module, reference):
     for sub in module.modules():
-        if isinstance(sub, (nn.Conv1d, nn.ConvTranspose1d, nn.Conv2d, nn.ConvTranspose2d)):
+        if isinstance(
+            sub, (nn.Conv1d, nn.ConvTranspose1d, nn.Conv2d, nn.ConvTranspose2d)
+        ):
             rescale_conv(sub, reference)
 
 
@@ -94,6 +97,7 @@ class LayerScale(nn.Module):
     """Layer scale from [Touvron et al 2021] (https://arxiv.org/pdf/2103.17239.pdf).
     This rescales diagonaly residual outputs close to 0 initially, then learnt.
     """
+
     def __init__(self, channels: int, init: float = 0):
         super().__init__()
         self.scale = nn.Parameter(torch.zeros(channels, requires_grad=True))
@@ -110,9 +114,22 @@ class DConv(nn.Module):
     Also before entering each residual branch, dimension is projected on a smaller subspace,
     e.g. of dim `channels // compress`.
     """
-    def __init__(self, channels: int, compress: float = 4, depth: int = 2, init: float = 1e-4,
-                 norm=True, attn=False, heads=4, ndecay=4, lstm=False, gelu=True,
-                 kernel=3, dilate=True):
+
+    def __init__(
+        self,
+        channels: int,
+        compress: float = 4,
+        depth: int = 2,
+        init: float = 1e-4,
+        norm=True,
+        attn=False,
+        heads=4,
+        ndecay=4,
+        lstm=False,
+        gelu=True,
+        kernel=3,
+        dilate=True,
+    ):
         """
         Args:
             channels: input/output channels for residual branch.
@@ -152,13 +169,15 @@ class DConv(nn.Module):
 
         self.layers = nn.ModuleList([])
         for d in range(self.depth):
-            dilation = 2 ** d if dilate else 1
+            dilation = 2**d if dilate else 1
             padding = dilation * (kernel // 2)
             mods = [
                 nn.Conv1d(channels, hidden, kernel, dilation=dilation, padding=padding),
-                norm_fn(hidden), act(),
+                norm_fn(hidden),
+                act(),
                 nn.Conv1d(hidden, 2 * channels, 1),
-                norm_fn(2 * channels), nn.GLU(1),
+                norm_fn(2 * channels),
+                nn.GLU(1),
                 LayerScale(channels, init),
             ]
             if attn:
@@ -180,6 +199,7 @@ class LocalState(nn.Module):
 
     Also a failed experiments with trying to provide some frequency based attention.
     """
+
     def __init__(self, channels: int, heads: int = 4, nfreqs: int = 0, ndecay: int = 4):
         super().__init__()
         assert channels % heads == 0, (channels, heads)
@@ -210,17 +230,17 @@ class LocalState(nn.Module):
         keys = self.key(x).view(B, heads, -1, T)
         # t are keys, s are queries
         dots = torch.einsum("bhct,bhcs->bhts", keys, queries)
-        dots /= keys.shape[2]**0.5
+        dots /= keys.shape[2] ** 0.5
         if self.nfreqs:
             periods = torch.arange(1, self.nfreqs + 1, device=x.device, dtype=x.dtype)
             freq_kernel = torch.cos(2 * math.pi * delta / periods.view(-1, 1, 1))
-            freq_q = self.query_freqs(x).view(B, heads, -1, T) / self.nfreqs ** 0.5
+            freq_q = self.query_freqs(x).view(B, heads, -1, T) / self.nfreqs**0.5
             dots += torch.einsum("fts,bhfs->bhts", freq_kernel, freq_q)
         if self.ndecay:
             decays = torch.arange(1, self.ndecay + 1, device=x.device, dtype=x.dtype)
             decay_q = self.query_decay(x).view(B, heads, -1, T)
             decay_q = torch.sigmoid(decay_q) / 2
-            decay_kernel = - decays.view(-1, 1, 1) * delta.abs() / self.ndecay**0.5
+            decay_kernel = -decays.view(-1, 1, 1) * delta.abs() / self.ndecay**0.5
             dots += torch.einsum("fts,bhfs->bhts", decay_kernel, decay_q)
 
         # Kill self reference.
@@ -238,42 +258,44 @@ class LocalState(nn.Module):
 
 class Demucs(LightningModule):
     @capture_init
-    def __init__(self,
-                 sources,
-                 # Channels
-                 audio_channels=2,
-                 channels=64,
-                 growth=2.,
-                 # Main structure
-                 depth=6,
-                 rewrite=True,
-                 lstm_layers=0,
-                 # Convolutions
-                 kernel_size=8,
-                 stride=4,
-                 context=1,
-                 # Activations
-                 gelu=True,
-                 glu=True,
-                 # Normalization
-                 norm_starts=4,
-                 norm_groups=4,
-                 # DConv residual branch
-                 dconv_mode=1,
-                 dconv_depth=2,
-                 dconv_comp=4,
-                 dconv_attn=4,
-                 dconv_lstm=4,
-                 dconv_init=1e-4,
-                 # Pre/post processing
-                 normalize=True,
-                 resample=True,
-                 # Weight init
-                 rescale=0.1,
-                 # Metadata
-                 samplerate=44100,
-                 segment=4 * 10,
-                 args=None):
+    def __init__(
+        self,
+        sources,
+        # Channels
+        audio_channels=2,
+        channels=64,
+        growth=2.0,
+        # Main structure
+        depth=6,
+        rewrite=True,
+        lstm_layers=0,
+        # Convolutions
+        kernel_size=8,
+        stride=4,
+        context=1,
+        # Activations
+        gelu=True,
+        glu=True,
+        # Normalization
+        norm_starts=4,
+        norm_groups=4,
+        # DConv residual branch
+        dconv_mode=1,
+        dconv_depth=2,
+        dconv_comp=4,
+        dconv_attn=4,
+        dconv_lstm=4,
+        dconv_init=1e-4,
+        # Pre/post processing
+        normalize=True,
+        resample=True,
+        # Weight init
+        rescale=0.1,
+        # Metadata
+        samplerate=44100,
+        segment=4 * 10,
+        args=None,
+    ):
         """
         Args:
             sources (list[str]): list of source names
@@ -333,29 +355,36 @@ class Demucs(LightningModule):
         self.downsampler = Resample(2, 1)
         self.args = args
         self.save_hyperparameters()
-    
-        sources_to_idx= {'drums':0, 
-                         'bass':1,
-                         'other':2,
-                         'vocals':3}    #dict to map source type to index   
-        
-        self.idx_list = []              #users provide customer sources:list, convert source type to idx:list
+
+        sources_to_idx = {
+            "drums": 0,
+            "bass": 1,
+            "other": 2,
+            "vocals": 3,
+        }  # dict to map source type to index
+
+        self.idx_list = (
+            []
+        )  # users provide customer sources:list, convert source type to idx:list
         for source in self.sources:
             idx = sources_to_idx[source]
-            self.idx_list.append(idx)        
-    
+            self.idx_list.append(idx)
+
         if args.data_augmentation:
-            augments = [augment.Shift(shift=int(args.samplerate * args.dset.train.shift),
-                                      same=args.augment.shift_same)]
+            augments = [
+                augment.Shift(
+                    shift=int(args.samplerate * args.dset.train.shift),
+                    same=args.augment.shift_same,
+                )
+            ]
             if args.augment.flip:
                 augments += [augment.FlipChannels(), augment.FlipSign()]
-            for aug in ['scale', 'remix']:
+            for aug in ["scale", "remix"]:
                 kw = getattr(args.augment, aug)
                 if kw.proba:
                     augments.append(getattr(augment, aug.capitalize())(**kw))
-            self.augment = torch.nn.Sequential(*augments)        
-        
-        
+            self.augment = torch.nn.Sequential(*augments)
+
         if glu:
             activation = nn.GLU(dim=1)
             ch_scale = 2
@@ -383,12 +412,22 @@ class Demucs(LightningModule):
             attn = index >= dconv_attn
             lstm = index >= dconv_lstm
             if dconv_mode & 1:
-                encode += [DConv(channels, depth=dconv_depth, init=dconv_init,
-                                 compress=dconv_comp, attn=attn, lstm=lstm)]
+                encode += [
+                    DConv(
+                        channels,
+                        depth=dconv_depth,
+                        init=dconv_init,
+                        compress=dconv_comp,
+                        attn=attn,
+                        lstm=lstm,
+                    )
+                ]
             if rewrite:
                 encode += [
                     nn.Conv1d(channels, ch_scale * channels, 1),
-                    norm_fn(ch_scale * channels), activation]
+                    norm_fn(ch_scale * channels),
+                    activation,
+                ]
             self.encoder.append(nn.Sequential(*encode))
 
             decode = []
@@ -398,13 +437,28 @@ class Demucs(LightningModule):
                 out_channels = len(self.sources) * audio_channels
             if rewrite:
                 decode += [
-                    nn.Conv1d(channels, ch_scale * channels, 2 * context + 1, padding=context),
-                    norm_fn(ch_scale * channels), activation]
+                    nn.Conv1d(
+                        channels, ch_scale * channels, 2 * context + 1, padding=context
+                    ),
+                    norm_fn(ch_scale * channels),
+                    activation,
+                ]
             if dconv_mode & 2:
-                decode += [DConv(channels, depth=dconv_depth, init=dconv_init,
-                                 compress=dconv_comp, attn=attn, lstm=lstm)]
-            decode += [nn.ConvTranspose1d(channels, out_channels,
-                       kernel_size, stride, padding=padding)]
+                decode += [
+                    DConv(
+                        channels,
+                        depth=dconv_depth,
+                        init=dconv_init,
+                        compress=dconv_comp,
+                        attn=attn,
+                        lstm=lstm,
+                    )
+                ]
+            decode += [
+                nn.ConvTranspose1d(
+                    channels, out_channels, kernel_size, stride, padding=padding
+                )
+            ]
             if index > 0:
                 decode += [norm_fn(out_channels), act2()]
             self.decoder.insert(0, nn.Sequential(*decode))
@@ -467,7 +521,7 @@ class Demucs(LightningModule):
             x = encode(x)
             saved.append(x)
 
-        if self.lstm:     
+        if self.lstm:
             x = self.lstm(x)
 
         for decode in self.decoder:
@@ -487,93 +541,91 @@ class Demucs(LightningModule):
         The original code can be found here
         https://github.com/facebookresearch/demucs/blob/cb1d773a35ff889d25a5177b86c86c0ce8ba9ef3/demucs/solver.py#L290
         """
-        #self.sources (list[str]): list of source names
-        #train_loader provide a batch of tracks with 4 sources
-        if self.args.data_augmentation:    
-            sources = self.augment(sources) #sources: [B, 4sources, 2, 44100*segment_length]
-        
-        mix = sources.sum(dim=1)  #mix: [B, 2channel, 441000]
-        estimate = self(mix) #estimate [B, num_sources from user, 2, 44100*segment_length]
-        
-        #custom sources list 
-        #only calculate the loss of user sources list
-        selected_sources = sources.index_select(1, torch.tensor(self.idx_list).to(sources.device))
-        
+        # self.sources (list[str]): list of source names
+        # train_loader provide a batch of tracks with 4 sources
+        if self.args.data_augmentation:
+            sources = self.augment(
+                sources
+            )  # sources: [B, 4sources, 2, 44100*segment_length]
+
+        mix = sources.sum(dim=1)  # mix: [B, 2channel, 441000]
+        estimate = self(
+            mix
+        )  # estimate [B, num_sources from user, 2, 44100*segment_length]
+
+        # custom sources list
+        # only calculate the loss of user sources list
+        selected_sources = sources.index_select(
+            1, torch.tensor(self.idx_list).to(sources.device)
+        )
+
         # checking if the estimate has the correct shape
         assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
         dims = tuple(range(2, sources.dim()))
 
-        if self.args.optim.loss == 'l1':
-            loss = F.l1_loss(
-                        estimate, 
-                        selected_sources,
-                        reduction='none')
+        if self.args.optim.loss == "l1":
+            loss = F.l1_loss(estimate, selected_sources, reduction="none")
             loss = loss.mean(dims).mean(0)
             reco = loss
-        elif self.args.optim.loss == 'mse':
-            loss = F.mse_loss(
-                        estimate, 
-                        selected_sources,
-                        reduction='none')
+        elif self.args.optim.loss == "mse":
+            loss = F.mse_loss(estimate, selected_sources, reduction="none")
             loss = loss.mean(dims)
             reco = loss**0.5
             reco = reco.mean(0)
         else:
             raise ValueError(f"Invalid loss {self.args.loss}")
-            
+
         weights = torch.tensor(self.args.weights).to(sources)
         loss = (loss * weights).sum() / weights.sum()
 
         # self.quantizer = get_quantizer(self, args.quant, self.optimizer)
         # quantization: get self.quantizer from train.py
         ms = 0
-        #ms: model size
+        # ms: model size
         if self.quantizer is not None:
             ms = self.quantizer.model_size()
         if self.args.quant.diffq:
             loss += args.quant.diffq * ms
-            #use ms to calculate loss
+            # use ms to calculate loss
 
-        
         losses = {}
-        losses['TRAIN/reco'] = (reco * weights).sum() / weights.sum()
-        losses['TRAIN/ms'] = ms
-       
-    
-        # penality
-        if self.args.svd.penalty > 0:            
-            kw = dict(args.svd)
-            kw.pop('penalty')
-            penalty = svd_penalty(self, **kw)
-            losses['penalty'] = penalty
-            loss += args.svd.penalty * penalty
-        losses['TRAIN/loss'] = loss
-        
-        self.log_dict(losses, on_step=False, on_epoch=True)
-        #log(graph title, take acc as data, on_step: plot every step, on_epch: plot every epoch)
-        
-        return loss
-   
+        losses["TRAIN/reco"] = (reco * weights).sum() / weights.sum()
+        losses["TRAIN/ms"] = ms
 
-    def validation_step(self,sources, batch_idx):
+        # penality
+        if self.args.svd.penalty > 0:
+            kw = dict(args.svd)
+            kw.pop("penalty")
+            penalty = svd_penalty(self, **kw)
+            losses["penalty"] = penalty
+            loss += args.svd.penalty * penalty
+        losses["TRAIN/loss"] = loss
+
+        self.log_dict(losses, on_step=False, on_epoch=True)
+        # log(graph title, take acc as data, on_step: plot every step, on_epch: plot every epoch)
+
+        return loss
+
+    def validation_step(self, sources, batch_idx):
         from .apply import apply_model
+
         # source 1, mixture+ number of sources, 2, 7736477)
-        mix = sources[:, 0] 
-        sources = sources[:, 1:]         
+        mix = sources[:, 0]
+        sources = sources[:, 1:]
 
         if self.args.valid_apply:
             estimate = apply_model(self, mix, split=self.args.test.split, overlap=0)
-        
+
         # checking if the estimate has the correct shape
         assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
         dims = tuple(range(2, sources.dim()))
 
-        if self.args.optim.loss == 'l1':
-            loss = F.l1_loss(estimate, sources, reduction='none')
+        if self.args.optim.loss == "l1":
+            loss = F.l1_loss(estimate, sources, reduction="none")
             loss = loss.mean(dims).mean(0)
             reco = loss
-        elif self.args.optim.loss == 'mse':
-            loss = F.mse_loss(estimate, sources, reduction='none')
+        elif self.args.optim.loss == "mse":
+            loss = F.mse_loss(estimate, sources, reduction="none")
             loss = loss.mean(dims)
             reco = loss**0.5
             reco = reco.mean(0)
@@ -582,43 +634,44 @@ class Demucs(LightningModule):
 
         weights = torch.tensor(self.args.weights).to(sources)
         loss = (loss * weights).sum() / weights.sum()
-        
+
         losses = {}
-        losses['VAL/loss'] = loss
-        
+        losses["VAL/loss"] = loss
+
         nsdrs = new_sdr(sources, estimate.detach()).mean(0)
-        #sources is each batch of daatset [tensor]
+        # sources is each batch of daatset [tensor]
         total = 0
-        for source, nsdr, w in zip(self.sources, nsdrs, weights): 
-        #self.sources is [str]
-            losses[f'VAL/nsdr_{source}'] = nsdr
+        for source, nsdr, w in zip(self.sources, nsdrs, weights):
+            # self.sources is [str]
+            losses[f"VAL/nsdr_{source}"] = nsdr
             total += w * nsdr
-        losses['VAL/nsdr'] = total / weights.sum()                
-        
-        self.log_dict( losses, on_step=False, on_epoch=True)
-       
-        return loss, nsdr       
+        losses["VAL/nsdr"] = total / weights.sum()
+
+        self.log_dict(losses, on_step=False, on_epoch=True)
+
+        return loss, nsdr
 
     #   loss, reco, alid loss, nsdr
-    def test_step(self,sources, batch_idx):
+    def test_step(self, sources, batch_idx):
         from .apply import apply_model
+
         # source 1, 5, 2, 7736477)
-        mix = sources[:, 0] 
-        sources = sources[:, 1:]         
+        mix = sources[:, 0]
+        sources = sources[:, 1:]
 
         if self.args.valid_apply:
             estimate = apply_model(self, mix, split=self.args.test.split, overlap=0)
-        
+
         # checking if the estimate has the correct shape
         assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
         dims = tuple(range(2, sources.dim()))
 
-        if self.args.optim.loss == 'l1':
-            loss = F.l1_loss(estimate, sources, reduction='none')
+        if self.args.optim.loss == "l1":
+            loss = F.l1_loss(estimate, sources, reduction="none")
             loss = loss.mean(dims).mean(0)
             reco = loss
-        elif self.args.optim.loss == 'mse':
-            loss = F.mse_loss(estimate, sources, reduction='none')
+        elif self.args.optim.loss == "mse":
+            loss = F.mse_loss(estimate, sources, reduction="none")
             loss = loss.mean(dims)
             reco = loss**0.5
             reco = reco.mean(0)
@@ -627,88 +680,107 @@ class Demucs(LightningModule):
 
         weights = torch.tensor(self.args.weights).to(sources)
         loss = (loss * weights).sum() / weights.sum()
-        
+
         losses = {}
-        losses['Test/loss'] = loss
-        
+        losses["Test/loss"] = loss
+
         nsdrs = new_sdr(sources, estimate.detach()).mean(0)
-        #sources is each batch of daatset [tensor]
+        # sources is each batch of daatset [tensor]
         total = 0
-        for source, nsdr, w in zip(self.sources, nsdrs, weights): 
-        #self.sources is [str]
-            losses[f'Test/nsdr_{source}'] = nsdr
+        for source, nsdr, w in zip(self.sources, nsdrs, weights):
+            # self.sources is [str]
+            losses[f"Test/nsdr_{source}"] = nsdr
             total += w * nsdr
-        losses['Test/nsdr'] = total / weights.sum()                
-        
-        self.log_dict( losses, on_step=False, on_epoch=True)
-        
-        
-        #show the audio output in tensorboard
+        losses["Test/nsdr"] = total / weights.sum()
+
+        self.log_dict(losses, on_step=False, on_epoch=True)
+
+        # show the audio output in tensorboard
         if batch_idx == 0:
             mixture_audio_stereo = mix
-            #[1, 2, 9675225]            
-            mixture_audio_mono = torch.mean(mixture_audio_stereo,1)
-            #from stereo [1,2, 9675225] to mono [1, 9675225] 
-            
+            # [1, 2, 9675225]
+            mixture_audio_mono = torch.mean(mixture_audio_stereo, 1)
+            # from stereo [1,2, 9675225] to mono [1, 9675225]
+
             self.logger.experiment.add_audio(
-                'test/mixture',
-                snd_tensor= mixture_audio_mono.detach().cpu().numpy(),
-                sample_rate=44100)            
-            #because snd_tensor need to be mono (1,L)
-            
-            #data visualising for audio
+                "test/mixture",
+                snd_tensor=mixture_audio_mono.detach().cpu().numpy(),
+                sample_rate=44100,
+            )
+            # because snd_tensor need to be mono (1,L)
+
+            # data visualising for audio
             for i, audio in enumerate(self.sources):
-                label_stereo = sources[:,i] #from [1, 4, 2, 9675225] to [1, 2, 9675225]  
-                label_mono=torch.mean(label_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]  
+                label_stereo = sources[
+                    :, i
+                ]  # from [1, 4, 2, 9675225] to [1, 2, 9675225]
+                label_mono = torch.mean(
+                    label_stereo, 1
+                )  # from stereo[1, 2, 9675225] to mono [1, 9675225]
                 self.logger.experiment.add_audio(
-                    f'test/label/{audio}',
+                    f"test/label/{audio}",
                     snd_tensor=label_mono.detach().cpu().numpy(),
-                    sample_rate=44100)  
-                
-                pred_stereo = estimate[:,i] #estimate [1, 4, 2, 9675225] to [1, 2, 9675225] 
-                pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+                    sample_rate=44100,
+                )
+
+                pred_stereo = estimate[
+                    :, i
+                ]  # estimate [1, 4, 2, 9675225] to [1, 2, 9675225]
+                pred_mono = torch.mean(
+                    pred_stereo, 1
+                )  # from stereo[1, 2, 9675225] to mono [1, 9675225]
                 self.logger.experiment.add_audio(
-                    f'test/pred/{audio}',
+                    f"test/pred/{audio}",
                     snd_tensor=pred_mono.detach().cpu().numpy(),
-                    sample_rate=44100)                      
-       
-        return loss, nsdr         
-    
-    
+                    sample_rate=44100,
+                )
+
+        return loss, nsdr
+
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.args.optim.lr,
+            self.parameters(),
+            lr=self.args.optim.lr,
             betas=(self.args.optim.momentum, self.args.optim.beta2),
-            weight_decay=self.args.optim.weight_decay)
+            weight_decay=self.args.optim.weight_decay,
+        )
         return optimizer
 
-    
     def load_state_dict(self, state, strict=True):
         # fix a mismatch with previous generation Demucs models.
         for idx in range(self.depth):
-            for a in ['encoder', 'decoder']:
-                for b in ['bias', 'weight']:
-                    new = f'{a}.{idx}.3.{b}'
-                    old = f'{a}.{idx}.2.{b}'
+            for a in ["encoder", "decoder"]:
+                for b in ["bias", "weight"]:
+                    new = f"{a}.{idx}.3.{b}"
+                    old = f"{a}.{idx}.2.{b}"
                     if old in state and new not in state:
                         state[new] = state.pop(old)
         super().load_state_dict(state, strict=strict)
 
-        
-    def predict_step(self, batch, batch_idx):     #dataloader return each batch: waveform:tensor, (audio_name:str)         
+    def predict_step(
+        self, batch, batch_idx
+    ):  # dataloader return each batch: waveform:tensor, (audio_name:str)
         from .apply import apply_model
-              
-        estimate = apply_model(self, batch[0], split=True, overlap=0) #estimate: [1, num_sources, 2, 9675225]
-        
-        #os.makedirs(<path>)  
-        #make dir to store separated tracks inside 
+
+        estimate = apply_model(
+            self, batch[0], split=True, overlap=0
+        )  # estimate: [1, num_sources, 2, 9675225]
+
+        # os.makedirs(<path>)
+        # make dir to store separated tracks inside
         # './' refer to pytorch lightning_outputs folder location
-        os.makedirs(os.path.join('./', (batch[1][0])))        
+        os.makedirs(os.path.join("./", (batch[1][0])))
 
-        for i, audio in enumerate(self.sources):                
-            pred_stereo = estimate[:,i] #pred_stereo: [1, 2, 9675225]             
-            pred_mono= torch.mean(pred_stereo,1) #from stereo[1, 2, 9675225] to mono [1, 9675225]            
+        for i, audio in enumerate(self.sources):
+            pred_stereo = estimate[:, i]  # pred_stereo: [1, 2, 9675225]
+            pred_mono = torch.mean(
+                pred_stereo, 1
+            )  # from stereo[1, 2, 9675225] to mono [1, 9675225]
 
-            #export the seperated audio by torchaudio.save(path, waveform, sample_rate)
-            #Input tensor has to be 2D
-            torchaudio.save(os.path.join('./', (batch[1][0]), audio+'.wav'), pred_mono.detach().cpu(), self.args.samplerate)
+            # export the seperated audio by torchaudio.save(path, waveform, sample_rate)
+            # Input tensor has to be 2D
+            torchaudio.save(
+                os.path.join("./", (batch[1][0]), audio + ".wav"),
+                pred_mono.detach().cpu(),
+                self.args.samplerate,
+            )

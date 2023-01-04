@@ -1,0 +1,18 @@
+repos:
+# Add these back in if we end up using notebooks in here at all?
+#-   repo: https://github.com/kynan/nbstripout
+#    rev: 0.3.9
+#    hooks:
+#    -   id: nbstripout
+#-   repo: https://github.com/mwouts/jupytext
+#    rev: v1.11.2
+#    hooks:
+#    -   id: jupytext
+#        args: [--sync, --pipe, black]
+#        additional_dependencies:
+#            - black==21.5b0 # Matches hook
+-   repo: https://github.com/psf/black
+    rev: 22.12.0
+    hooks:
+    -   id: black
+        language_version: python3

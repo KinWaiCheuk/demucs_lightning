@@ -11,6 +11,7 @@
 1. [Half-Precision Training](#Half-Precision-Training)
 1. [Default settings](#Default-settings)
 1. [Inferencing](#Inferencing)
+1. [Development](#Development)
 
 
 ## Introduction
@@ -156,3 +157,11 @@ python inference.py infer_audio_folder_path='../../infer_audio' checkpoint='outp
 ```
 
 By default, hydra saves all the seperated audio in the `outputs` folder.
+## Development
+
+If you are a developer on this repo, please run:
+
+```
+pre-commit install
+```
+

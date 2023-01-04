@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 """Ways to make the model stronger."""
 import random
+
 import torch
 
 
@@ -28,8 +29,18 @@ def power_iteration(m, niters=1, bs=1):
 penalty_rng = random.Random(1234)
 
 
-def svd_penalty(model, min_size=0.1, dim=1, niters=2, powm=False, convtr=True,
-                proba=1, conv_only=False, exact=False, bs=1):
+def svd_penalty(
+    model,
+    min_size=0.1,
+    dim=1,
+    niters=2,
+    powm=False,
+    convtr=True,
+    proba=1,
+    conv_only=False,
+    exact=False,
+    bs=1,
+):
     """
     Penalty on the largest singular value for a layer.
     Args:
@@ -49,7 +60,7 @@ def svd_penalty(model, min_size=0.1, dim=1, niters=2, powm=False, convtr=True,
     """
     total = 0
     if penalty_rng.random() > proba:
-        return 0.
+        return 0.0
 
     for m in model.modules():
         for name, p in m.named_parameters(recurse=False):

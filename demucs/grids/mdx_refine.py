@@ -7,17 +7,14 @@
 Main training for the Track A MDX models.
 """
 
+from ..train import main
 from ._explorers import MyExplorer
 from .mdx import TRACK_A
-from ..train import main
 
 
 @MyExplorer
 def explorer(launcher):
-    launcher.slurm_(
-        gpus=8,
-        time=3 * 24 * 60,
-        partition='learnlab')
+    launcher.slurm_(gpus=8, time=3 * 24 * 60, partition="learnlab")
 
     # Reproduce results from MDX competition Track A
     # WARNING: all the experiments in the `mdx` grid must have completed.
@@ -26,7 +23,7 @@ def explorer(launcher):
         launcher(xp.argv)
         for diffq in [1e-4, 3e-4]:
             xp_src = main.get_xp_from_sig(xp.cfg.continue_from)
-            q_argv = [f'quant.diffq={diffq}']
+            q_argv = [f"quant.diffq={diffq}"]
             actual_src = main.get_xp(xp_src.argv + q_argv)
             actual_src.link.load()
             assert len(actual_src.link.history) == actual_src.cfg.epochs
