@@ -928,7 +928,7 @@ class HDemucs(LightningModule):
             loss += args.svd.penalty * penalty
         losses["TRAIN/loss"] = loss
 
-        self.log_dict(losses, on_step=False, on_epoch=True)
+        self.log_dict(losses, on_step=False, on_epoch=True, sync_dist=True)
         # log(graph title, take acc as data, on_step: plot every step, on_epch: plot every epoch)
 
         return loss
@@ -974,7 +974,7 @@ class HDemucs(LightningModule):
             total += w * nsdr
         losses["VAL/nsdr"] = total / weights.sum()
 
-        self.log_dict(losses, on_step=False, on_epoch=True)
+        self.log_dict(losses, on_step=False, on_epoch=True, sync_dist=True)
 
         return loss, nsdr
 
@@ -1022,7 +1022,7 @@ class HDemucs(LightningModule):
             total += w * nsdr
         losses["Test/nsdr"] = total / weights.sum()
 
-        self.log_dict(losses, on_step=False, on_epoch=True)
+        self.log_dict(losses, on_step=False, on_epoch=True, sync_dist=True)
 
         # show the audio output in tensorboard
         if batch_idx == 0:
