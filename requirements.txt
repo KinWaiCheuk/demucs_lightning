@@ -16,3 +16,5 @@ museval
 mypy
 openunmix
 pyyaml
+
+wandb

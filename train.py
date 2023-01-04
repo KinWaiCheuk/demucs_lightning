@@ -16,7 +16,7 @@ from hydra import compose, initialize
 from hydra.utils import to_absolute_path
 from omegaconf import OmegaConf
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.strategies import DDPStrategy
 from torch.utils.data import DataLoader, Subset
 
@@ -137,7 +137,14 @@ def main(args):
     # file name shown in tensorboard logger
 
     lr_monitor = LearningRateMonitor(logging_interval="step")
-    logger = TensorBoardLogger(save_dir=".", version=1, name=name)
+
+    if args.logger == "tensorboard":
+        logger = TensorBoardLogger(save_dir=".", version=1, name=name)
+    elif args.logger == "wandb":
+        logger = WandbLogger(project="demucs_lightning", **args.wandb)
+    else:
+        raise Exception(f"Logger {args.logger} not implemented")
+
     if (
         args.trainer.resume_from_checkpoint
     ):  # resume previous training when this is given
