@@ -1,4 +1,4 @@
-AudioLoader==0.1.0
+AudioLoader==0.1.3
 omegaconf 
 tqdm
 torch
