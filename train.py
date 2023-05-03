@@ -17,7 +17,7 @@ from hydra.utils import to_absolute_path
 from omegaconf import OmegaConf
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-from pytorch_lightning.strategies import DDPStrategy
+from pytorch_lightning.plugins import DDPPlugin
 from torch.utils.data import DataLoader, Subset
 
 # library for loader()
@@ -155,7 +155,7 @@ def main(args):
     trainer = pl.Trainer(
         **args.trainer,
         callbacks=[checkpoint_callback, lr_monitor],
-        strategy=DDPStrategy(find_unused_parameters=False),
+        strategy=DDPPlugin(find_unused_parameters=False),
         logger=logger,
     )
 
