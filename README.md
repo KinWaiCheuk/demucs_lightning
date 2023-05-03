@@ -71,26 +71,26 @@ If it is your first time running the repo, you can use the argument `download=Tr
 It requires `16,885 MB` of GPU memory. If you do not have enough GPU memory, please read [this section](#Training-with-a-less-powerful-GPU).
 
 ```bash
-python train.py gpus=[0] model=Demucs download=True
+python train.py devices=[0] model=Demucs download=True
 ```
 
 ### HDemucs
 It requires `19,199 MB` of GPU memory.
 ```bash
-python train.py gpus=[0] model=HDemucs download=True
+python train.py devices=[0] model=HDemucs download=True
 ```
 
 ## Resume from Checkpoints
 It is possible to continue training from an existing checkpoint by passing the `resume_checkpoint` argument. By default, hydra saves all the checkpoints at `'outputs/YYYY-MM-DD/HH-MM-SS/XXX_experiment_epoch=XXX_augmentation=XXX/version_1/checkpoints/XXX.ckpt'`. For example, if you have a checkpoint trained with 32-bit precision for 100 epochs already via the following command:
 
 ```bash
-python train.py gpus=[0] trainer.precision=32 epochs=100
+python train.py devices=[0] trainer.precision=32 epochs=100
 ```
 
 And now you want to train for 50 epochs more, then you can use the following CLI command:
 
 ```bash
-python train.py gpus=[0] trainer.precision=16 epochs=150 resume_checkpoint='outputs/2022-05-24/21-20-17/Demucs_experiment_epoch=360_augmentation=True/version_1/checkpoints/e=123-TRAIN_loss=0.08.ckpt'
+python train.py devices=[0] trainer.precision=16 epochs=150 resume_checkpoint='outputs/2022-05-24/21-20-17/Demucs_experiment_epoch=360_augmentation=True/version_1/checkpoints/e=123-TRAIN_loss=0.08.ckpt'
 ```
 
 You can always move you checkpoints to a better place to shorten the path name.
@@ -137,7 +137,7 @@ Double-precision is also supported by specifying `trainer.precision=64`.
 ## Default settings 
 The full list of arguments and their default values can be found in `conf/config.yaml`.
 
-__gpus__: Select which GPU to use. If you have multiple GPUs on your machine and you want to use GPU:2, you can set `gpus=[2]`. If you want to use DDP (multi-GPU training), you can set `gpus=2`, it will automatically use the first two GPUs avaliable in your machine. If you want to use GPU:0, GPU:2, and GPU:3 for training, you can set `gpus=[0,2,3]`.
+__devices__: Select which GPU to use. If you have multiple GPUs on your machine and you want to use GPU:2, you can set `devices=[2]`. If you want to use DDP (multi-GPU training), you can set `devices=2`, it will automatically use the first two GPUs avaliable in your machine. If you want to use GPU:0, GPU:2, and GPU:3 for training, you can set `devices=[0,2,3]`.
 
 __download__: When set to `True`, it will automatically download and setup the dataset. Default as `False`
 
